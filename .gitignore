@@ -1,0 +1,51 @@
+# ─── Dependencies ──────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ─── Build Output ──────────────────────────────────────────────────────────────
+dist/
+dist-ssr/
+build/
+out/
+*.local
+
+# ─── Environment & Secrets (NEVER commit these) ────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env PLACEHOLDER.example
+!env keys placeholder.example
+
+# ─── Vite Cache ────────────────────────────────────────────────────────────────
+.vite/
+vite.config.ts.timestamp-*
+
+# ─── TypeScript ────────────────────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ─── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─── OS Files ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Editor / IDE ──────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ─── Supabase Local Dev ────────────────────────────────────────────────────────
+supabase/.temp/
+supabase/config.toml
