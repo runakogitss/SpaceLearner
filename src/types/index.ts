@@ -4,6 +4,8 @@ export interface Profile {
   full_name?: string;
   avatar_url?: string;
   daily_goal_minutes: number;
+  exp?: number;
+  level?: number;
   updated_at?: string;
   created_at?: string;
 }
@@ -27,6 +29,7 @@ export interface StudyTemplate {
   name: string;
   work_duration_minutes: number;
   break_duration_minutes: number;
+  cycles?: number;
   is_system_default: boolean;
   created_at?: string;
 }
@@ -39,7 +42,9 @@ export interface PomodoroSession {
   subject_name: string;
   duration_minutes: number;
   break_minutes: number;
+  cycles_completed?: number;
   is_completed: boolean;
+  exp_earned?: number;
   completed_at: string;
 }
 
@@ -53,13 +58,13 @@ export interface AIEvaluation {
 }
 
 export interface FocusStats {
-  totalFocusTimeMinutes: number; // e.g. 1122 mins = 18h 42m
-  completedSessionsCount: number; // e.g. 24
-  abandonedSessionsCount: number; // e.g. 4
-  focusScore: number; // percentage completed ratio (e.g. 87%)
-  streakDays: number; // e.g. 7
-  userLevel: number; // e.g. 12
-  userExp: number; // e.g. 1250 / 2000
+  totalFocusTimeMinutes: number;
+  completedSessionsCount: number;
+  abandonedSessionsCount: number;
+  focusScore: number;
+  streakDays: number;
+  userLevel: number;
+  userExp: number;
 }
 
 export interface HeatmapCell {

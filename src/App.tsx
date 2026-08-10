@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { QuickStatsBar } from './components/QuickStatsBar';
@@ -14,7 +14,11 @@ import { SettingsModal } from './components/settings/SettingsModal';
 import { useStudyStore } from './store/useStudyStore';
 
 export const App: React.FC = () => {
-  const { activeTab } = useStudyStore();
+  const { activeTab, syncFromSupabase } = useStudyStore();
+
+  useEffect(() => {
+    syncFromSupabase();
+  }, [syncFromSupabase]);
 
   return (
     <div className="flex min-h-screen bg-cosmic-bg text-slate-100 font-sans selection:bg-purple-600 selection:text-white">
