@@ -1,388 +1,110 @@
-import React, { useState, useEffect } from 'react';
-import { User, Database, Sparkles, Key, CheckCircle, AlertCircle, Save, LogIn, LogOut, UserPlus, RefreshCw } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AlertCircle, CheckCircle, Database, Image, LogIn, LogOut, Save, ShieldCheck, Upload, User, UserPlus } from 'lucide-react';
 import { useStudyStore } from '../../store/useStudyStore';
-import { isSupabaseConfigured, supabase } from '../../lib/supabase';
+import { isSupabaseConfigured, supabase, uploadSupabaseAvatar } from '../../lib/supabase';
 
 export const SettingsModal: React.FC = () => {
-  const { userProfile, updateProfile, isSandboxMode, toggleSandboxMode, resetSandboxData, syncFromSupabase } = useStudyStore();
-  
-  const [username, setUsername] = useState(userProfile.username || 'Reynard');
-  const [fullName, setFullName] = useState(userProfile.full_name || 'Reynard Runako');
-  const [dailyGoal, setDailyGoal] = useState(userProfile.daily_goal_minutes.toString());
-  const [savedSuccess, setSavedSuccess] = useState(false);
-  const [resetSuccess, setResetSuccess] = useState(false);
-
-  // Sync state if userProfile changes
-  useEffect(() => {
-    setUsername(userProfile.username || 'Reynard');
-    setFullName(userProfile.full_name || 'Reynard Runako');
-    setDailyGoal((userProfile.daily_goal_minutes || 120).toString());
-  }, [userProfile]);
-
-  // Auth State
+  const { userProfile, updateProfile, resetSandboxData, syncFromSupabase } = useStudyStore();
+  const [username, setUsername] = useState('Traveller');
+  const [fullName, setFullName] = useState('Traveller');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState('');
+  const [dailyGoal, setDailyGoal] = useState('120');
   const [authUser, setAuthUser] = useState<any>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
-  const [authMessage, setAuthMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [authLoading, setAuthLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isSupabaseConfigured && supabase) {
-      supabase.auth.getUser().then(({ data }) => {
-        setAuthUser(data.user);
-      });
+    setUsername(userProfile.username || 'Traveller');
+    setFullName(userProfile.full_name || 'Traveller');
+    setAvatarPreview(userProfile.avatar_url || '');
+    setDailyGoal(String(userProfile.daily_goal_minutes || 120));
+  }, [userProfile]);
 
-      const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-        setAuthUser(session?.user || null);
-        if (session?.user) {
-          syncFromSupabase();
-        }
-      });
-
-      return () => {
-        authListener.subscription.unsubscribe();
-      };
-    }
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getUser().then(({ data }) => setAuthUser(data.user));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user ?? null);
+      if (session?.user) syncFromSupabase();
+    });
+    return () => listener.subscription.unsubscribe();
   }, [syncFromSupabase]);
 
-  const handleSaveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await updateProfile({
-      username,
-      full_name: fullName,
-      daily_goal_minutes: parseInt(dailyGoal, 10) || 120
-    });
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+  const selectAvatar = (file: File | null) => {
+    if (!file) return;
+    const extension = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(extension) || file.size > 5 * 1024 * 1024) { setMessage({ type: 'error', text: 'Choose a JPG, PNG, WEBP, or GIF image under 5 MB.' }); return; }
+    setAvatarFile(file); setAvatarPreview(URL.createObjectURL(file));
   };
 
-  const handleResetSandbox = () => {
-    resetSandboxData();
-    setResetSuccess(true);
-    setTimeout(() => setResetSuccess(false), 3000);
-  };
+  const encodeAvatar = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Unable to read the selected photo.'));
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsDataURL(file);
+  });
 
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!supabase || !email || !password) return;
-
-    setAuthLoading(true);
-    setAuthMessage(null);
-
-    try {
-      if (authMode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              username: email.split('@')[0],
-              full_name: email.split('@')[0]
-            }
-          }
-        });
-
-        if (error) {
-          setAuthMessage({ type: 'error', text: error.message });
-        } else if (data.user) {
-          setAuthMessage({ type: 'success', text: 'Account created! Authenticated & synced with Supabase.' });
-          toggleSandboxMode(false);
-          await syncFromSupabase();
-        }
-      } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-
-        if (error) {
-          setAuthMessage({ type: 'error', text: error.message });
-        } else if (data.user) {
-          setAuthMessage({ type: 'success', text: 'Logged in successfully! Fresh profile synced.' });
-          toggleSandboxMode(false);
-          await syncFromSupabase();
-        }
-      }
-    } catch (err: any) {
-      setAuthMessage({ type: 'error', text: err?.message || 'Authentication error' });
-    } finally {
-      setAuthLoading(false);
+  const saveProfile = async (event: React.FormEvent) => {
+    event.preventDefault();
+    let avatarUrl = userProfile.avatar_url || '';
+    if (avatarFile) {
+      if (!authUser) { setMessage({ type: 'error', text: 'Sign in before uploading a profile photo so it can be saved securely.' }); return; }
+      const uploadedUrl = await uploadSupabaseAvatar(authUser.id, avatarFile);
+      // Storage may not be enabled on an existing Supabase project. In that
+      // case the existing TEXT profile field safely stores the local image.
+      avatarUrl = uploadedUrl || await encodeAvatar(avatarFile);
     }
+    await updateProfile({ username: username.trim() || 'Traveller', full_name: fullName.trim() || 'Traveller', avatar_url: avatarUrl, daily_goal_minutes: Math.max(1, Number(dailyGoal) || 120) });
+    setAvatarFile(null);
+    setMessage({ type: 'success', text: authUser ? 'Profile and photo saved to your Space Learner account.' : 'Profile saved for this guest session.' });
   };
 
-  const handleSignOut = async () => {
+  const submitAuth = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!supabase) return;
-    await supabase.auth.signOut();
-    setAuthUser(null);
-    setAuthMessage({ type: 'success', text: 'Logged out. Switched back to Sandbox mode.' });
-    toggleSandboxMode(true);
+    setLoading(true); setMessage(null);
+    const result = authMode === 'signup'
+      ? await supabase.auth.signUp({ email, password, options: { data: { username: username.trim() || email.split('@')[0], full_name: fullName.trim() || username.trim() || email.split('@')[0] } } })
+      : await supabase.auth.signInWithPassword({ email, password });
+    if (result.error) setMessage({ type: 'error', text: result.error.message });
+    else { await syncFromSupabase(); setMessage({ type: 'success', text: authMode === 'signup' ? 'Account created. Your profile is syncing now.' : 'Welcome back. Your live data is synced.' }); }
+    setLoading(false);
   };
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Title */}
-      <div>
-        <h2 className="text-xl font-bold font-outfit text-white tracking-wide uppercase">
-          SETTINGS &amp; INTEGRATIONS
-        </h2>
-        <p className="text-xs text-cosmic-textMuted">
-          Manage profile preferences, database connection, and auth synchronization.
-        </p>
-      </div>
+  const signOut = async () => { if (supabase) await supabase.auth.signOut(); setAuthUser(null); resetSandboxData(); setMessage({ type: 'success', text: 'Signed out. Welcome, Traveller.' }); };
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Profile Settings Card */}
-        <div className="bg-cosmic-card/90 border border-cosmic-border rounded-3xl p-6 shadow-glow-card flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-5">
-              <div className="p-2.5 rounded-xl bg-purple-950/80 border border-purple-500/30 text-purple-300">
-                <User className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold font-outfit text-white">PROFILE ACCESS</h3>
-                <p className="text-[11px] text-cosmic-textMuted">Student info &amp; daily goal</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-semibold text-cosmic-textMuted uppercase block mb-1">
-                  Username / Display Name
-                </label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-slate-900 border border-cosmic-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-semibold text-cosmic-textMuted uppercase block mb-1">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full bg-slate-900 border border-cosmic-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-semibold text-cosmic-textMuted uppercase block mb-1">
-                  Daily Study Goal (Minutes)
-                </label>
-                <input
-                  type="number"
-                  value={dailyGoal}
-                  onChange={(e) => setDailyGoal(e.target.value)}
-                  className="w-full bg-slate-900 border border-cosmic-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition-all"
-              >
-                {savedSuccess ? (
-                  <>
-                    <CheckCircle className="w-4 h-4 text-emerald-300" />
-                    <span>SETTINGS SAVED!</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    <span>SAVE PROFILE</span>
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-
-          <div className="pt-4 mt-6 border-t border-white/5">
-            <button
-              onClick={handleResetSandbox}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 text-xs font-semibold transition-all"
-            >
-              {resetSuccess ? (
-                <>
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400">DATA RESTARTED!</span>
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>RESET SANDBOX TO FRESH STATE</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Database & Supabase Auth Card */}
-        <div className="bg-cosmic-card/90 border border-cosmic-border rounded-3xl p-6 shadow-glow-card flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-5">
-              <div className="p-2.5 rounded-xl bg-indigo-950/80 border border-indigo-500/30 text-indigo-300">
-                <Database className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold font-outfit text-white">DATABASE &amp; AUTH</h3>
-                <p className="text-[11px] text-cosmic-textMuted">Supabase real-time cloud sync</p>
-              </div>
-            </div>
-
-            {/* Trial Sandbox Toggle */}
-            <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/5 mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-purple-400" />
-                  <span className="text-xs font-semibold text-white">TRIAL SANDBOX MODE</span>
-                </div>
-                <button
-                  onClick={() => toggleSandboxMode(!isSandboxMode)}
-                  className={`w-11 h-6 rounded-full transition-colors relative p-1 ${
-                    isSandboxMode ? 'bg-purple-600' : 'bg-slate-700'
-                  }`}
-                >
-                  <div
-                    className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                      isSandboxMode ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-              <p className="text-[11px] text-cosmic-textMuted leading-relaxed">
-                {isSandboxMode 
-                  ? 'Running in trial mode. Logging in or toggling off syncs your data live with PostgreSQL.' 
-                  : 'Connected to Supabase PostgreSQL schema v2.0 live cloud storage.'}
-              </p>
-            </div>
-
-            {/* Supabase Account Authentication Box */}
-            {isSupabaseConfigured && (
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-purple-500/20 mb-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold font-outfit text-purple-300 uppercase flex items-center gap-1.5">
-                    <LogIn className="w-3.5 h-3.5" /> SUPABASE AUTHENTICATION
-                  </span>
-                  {authUser && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-500/30 text-emerald-400 font-semibold">
-                      LOGGED IN
-                    </span>
-                  )}
-                </div>
-
-                {authUser ? (
-                  <div className="space-y-2">
-                    <div className="text-xs text-slate-300">
-                      Signed in as <span className="text-white font-medium">{authUser.email}</span>
-                    </div>
-                    <button
-                      onClick={handleSignOut}
-                      className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-all"
-                    >
-                      <LogOut className="w-3.5 h-3.5" /> SIGN OUT
-                    </button>
-                  </div>
-                ) : (
-                  <form onSubmit={handleAuthSubmit} className="space-y-2.5">
-                    <div>
-                      <input
-                        type="email"
-                        placeholder="Supabase user email..."
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full bg-slate-900 border border-cosmic-border rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <input
-                        type="password"
-                        placeholder="Password..."
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full bg-slate-900 border border-cosmic-border rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
-                        required
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="submit"
-                        disabled={authLoading}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition-all disabled:opacity-50"
-                      >
-                        {authMode === 'signin' ? (
-                          <>
-                            <LogIn className="w-3.5 h-3.5" /> Log In
-                          </>
-                        ) : (
-                          <>
-                            <UserPlus className="w-3.5 h-3.5" /> Sign Up
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setAuthMode(authMode === 'signin' ? 'signup' : 'signin')}
-                        className="text-[11px] text-purple-400 hover:text-purple-300 underline px-2"
-                      >
-                        {authMode === 'signin' ? 'Need an account?' : 'Already have account?'}
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {authMessage && (
-                  <div className={`p-2 rounded-lg text-[11px] ${
-                    authMessage.type === 'success' ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30' : 'bg-rose-950/80 text-rose-300 border border-rose-500/30'
-                  }`}>
-                    {authMessage.text}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Integration Status Indicators */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900/40 border border-white/5 text-xs">
-                <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-slate-400" />
-                  <span className="text-slate-200 font-medium">Supabase Database SQL</span>
-                </div>
-                {isSupabaseConfigured ? (
-                  <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
-                    <CheckCircle className="w-3.5 h-3.5" /> CONNECTED
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-400">
-                    <AlertCircle className="w-3.5 h-3.5" /> TRIAL SANDBOX ACTIVE
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900/40 border border-white/5 text-xs">
-                <div className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-slate-400" />
-                  <span className="text-slate-200 font-medium">OpenRouter AI API Key</span>
-                </div>
-                <span className="text-[10px] font-semibold text-purple-400 bg-purple-950/60 border border-purple-500/30 px-2 py-0.5 rounded-full">
-                  PHASE II READY
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-[10px] text-cosmic-textMuted italic mt-4 pt-3 border-t border-white/5">
-            SQL Schema v2.0 synchronized with <code className="text-purple-300">supabase/schema.sql</code>
-          </p>
-        </div>
-      </div>
+  return <div className="max-w-5xl mx-auto space-y-6">
+    <div className="relative overflow-hidden rounded-3xl border border-purple-500/20 bg-gradient-to-r from-indigo-950/70 via-cosmic-card to-purple-950/50 p-7 shadow-glow-card">
+      <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-purple-500/20 blur-3xl" />
+      <p className="text-[10px] uppercase tracking-[0.22em] font-bold text-purple-300">Personal command centre</p>
+      <h2 className="mt-2 text-2xl font-bold font-outfit tracking-wide text-white">SETTINGS &amp; PROFILE</h2>
+      <p className="mt-1 text-sm text-cosmic-textMuted">Shape your study space and keep your account securely connected.</p>
     </div>
-  );
+
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+      <form onSubmit={saveProfile} className="lg:col-span-3 rounded-3xl border border-cosmic-border bg-cosmic-card/90 p-6 shadow-glow-card space-y-5">
+        <div className="flex items-center gap-3"><div className="rounded-2xl border border-purple-400/30 bg-purple-950/70 p-3 text-purple-300"><User className="h-5 w-5" /></div><div><h3 className="text-sm font-bold tracking-wide text-white">PROFILE DETAILS</h3><p className="text-xs text-cosmic-textMuted">Visible in your personal study dashboard.</p></div></div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Display name" value={username} onChange={setUsername} placeholder="Traveller" />
+          <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Traveller" />
+        </div>
+        <div><label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-cosmic-textMuted">Profile photo</label><div className="flex items-center gap-4 rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 p-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-purple-400/30 bg-purple-950 text-purple-200">{avatarPreview ? <img src={avatarPreview} alt="Profile preview" className="h-full w-full object-cover" /> : <Image className="h-5 w-5" />}</div><label className="flex cursor-pointer items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-950/40 px-3 py-2 text-xs font-bold text-purple-200 hover:bg-purple-900/50"><Upload className="h-4 w-4" /> CHOOSE JPG PHOTO<input type="file" accept=".jpg,.jpeg,image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => selectAvatar(e.target.files?.[0] || null)} /></label><span className="text-[10px] text-cosmic-textMuted">JPG, PNG, WEBP, or GIF · 5 MB max</span></div></div>
+        <div><div className="mb-2 flex justify-between"><label className="text-[10px] font-bold uppercase tracking-wider text-cosmic-textMuted">Daily focus goal</label><span className="text-xs font-bold text-purple-300">{dailyGoal} min</span></div><input type="range" min="15" max="360" step="15" value={dailyGoal} onChange={(e) => setDailyGoal(e.target.value)} className="w-full accent-purple-500" /><div className="mt-2 flex justify-between text-[10px] text-cosmic-textMuted"><span>15 min</span><span>6 hrs</span></div></div>
+        <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 py-3 text-xs font-bold tracking-wide text-white transition hover:brightness-110"><Save className="h-4 w-4" /> SAVE PROFILE</button>
+      </form>
+
+      <section className="lg:col-span-2 rounded-3xl border border-cosmic-border bg-cosmic-card/90 p-6 shadow-glow-card space-y-5">
+        <div className="flex items-center gap-3"><div className="rounded-2xl border border-indigo-400/30 bg-indigo-950/70 p-3 text-indigo-300"><Database className="h-5 w-5" /></div><div><h3 className="text-sm font-bold tracking-wide text-white">ACCOUNT &amp; SYNC</h3><p className="text-xs text-cosmic-textMuted">Your data is stored privately in Supabase.</p></div></div>
+        <div className={`rounded-2xl border p-4 ${authUser ? 'border-emerald-500/25 bg-emerald-950/30' : 'border-slate-700 bg-slate-950/50'}`}><div className="flex items-center gap-2 text-xs font-bold text-white"><ShieldCheck className={`h-4 w-4 ${authUser ? 'text-emerald-400' : 'text-slate-400'}`} />{authUser ? 'LIVE DATABASE CONNECTED' : 'GUEST MODE'}</div><p className="mt-1 text-[11px] text-cosmic-textMuted">{authUser ? authUser.email : 'Sign in to save your plans, sessions, statistics, and profile across devices.'}</p></div>
+        {!isSupabaseConfigured ? <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 p-3 text-xs text-amber-200"><AlertCircle className="mr-1 inline h-4 w-4" />Add Supabase environment variables to enable accounts and cloud sync.</div> : authUser ? <button onClick={signOut} className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-500/30 bg-rose-950/40 py-2.5 text-xs font-bold text-rose-200"><LogOut className="h-4 w-4" /> SIGN OUT</button> : <form onSubmit={submitAuth} className="space-y-3"><div className="flex rounded-xl bg-slate-950 p-1"><button type="button" onClick={() => setAuthMode('signin')} className={`flex-1 rounded-lg py-2 text-xs font-bold ${authMode === 'signin' ? 'bg-purple-600 text-white' : 'text-slate-400'}`}>LOG IN</button><button type="button" onClick={() => setAuthMode('signup')} className={`flex-1 rounded-lg py-2 text-xs font-bold ${authMode === 'signup' ? 'bg-purple-600 text-white' : 'text-slate-400'}`}>CREATE ACCOUNT</button></div><input required type="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl border border-cosmic-border bg-slate-950/70 px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"/><input required type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-xl border border-cosmic-border bg-slate-950/70 px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500"/><button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 py-2.5 text-xs font-bold text-white disabled:opacity-50">{authMode === 'signin' ? <LogIn className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}{loading ? 'CONNECTING…' : authMode === 'signin' ? 'LOG IN' : 'CREATE ACCOUNT'}</button></form>}
+        {message && <div className={`rounded-xl border p-3 text-xs ${message.type === 'success' ? 'border-emerald-500/30 bg-emerald-950/40 text-emerald-200' : 'border-rose-500/30 bg-rose-950/40 text-rose-200'}`}>{message.type === 'success' ? <CheckCircle className="mr-1 inline h-4 w-4" /> : <AlertCircle className="mr-1 inline h-4 w-4" />}{message.text}</div>}
+      </section>
+    </div>
+  </div>;
 };
+
+const Field: React.FC<{ label: string; value: string; onChange: (value: string) => void; placeholder: string }> = ({ label, value, onChange, placeholder }) => <div><label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-cosmic-textMuted">{label}</label><input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full rounded-xl border border-cosmic-border bg-slate-950/70 px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500" /></div>;

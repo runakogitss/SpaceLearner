@@ -65,6 +65,9 @@ export interface FocusStats {
   streakDays: number;
   userLevel: number;
   userExp: number;
+  expToNextLevel?: number;
+  todayFocusMinutes?: number;
+  dailyGoalMinutes?: number;
 }
 
 export interface HeatmapCell {

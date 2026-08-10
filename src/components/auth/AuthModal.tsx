@@ -9,7 +9,7 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
-  const { userProfile, toggleSandboxMode, syncFromSupabase } = useStudyStore();
+  const { userProfile, toggleSandboxMode, resetSandboxData, syncFromSupabase } = useStudyStore();
 
   const [authUser, setAuthUser] = useState<any>(null);
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
@@ -99,8 +99,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     if (!supabase) return;
     await supabase.auth.signOut();
     setAuthUser(null);
-    setMessage({ type: 'success', text: 'Logged out. Switched back to Trial Sandbox mode.' });
+    setMessage({ type: 'success', text: 'Logged out. You are now browsing as Traveller.' });
     toggleSandboxMode(true);
+    resetSandboxData();
   };
 
   return (
@@ -288,15 +289,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           <span className="flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-purple-400" /> Powered by Supabase PostgreSQL
           </span>
-          <button
-            onClick={() => {
-              toggleSandboxMode(true);
-              onClose();
-            }}
-            className="text-purple-400 hover:text-purple-300 underline"
-          >
-            Continue as Guest Trial
-          </button>
+          <span>Guest mode is private to this browser session.</span>
         </div>
       </div>
     </div>

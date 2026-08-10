@@ -17,9 +17,11 @@ import {
   deleteSupabasePlannerNote,
   fetchSupabaseStudyTemplates,
   insertSupabaseStudyTemplate,
+  deleteSupabaseStudyTemplate,
   fetchSupabasePomodoroSessions,
   insertSupabasePomodoroSession,
-  fetchSupabaseDashboardView
+  fetchSupabaseDashboardView,
+  ensureSupabaseProfile
 } from '../lib/supabase';
 
 interface StudyState {
@@ -34,6 +36,7 @@ interface StudyState {
   selectedTemplate: StudyTemplate;
   systemTemplates: StudyTemplate[];
   userCustomTemplates: StudyTemplate[];
+  hasMoreSessions: boolean;
   timeLeftSeconds: number;
   isTimerRunning: boolean;
   timerMode: 'work' | 'break';
@@ -56,6 +59,8 @@ interface StudyState {
   setActiveTab: (tab: 'dashboard' | 'timer' | 'planner' | 'statistics' | 'settings') => void;
   selectTemplate: (template: StudyTemplate) => void;
   createCustomTemplate: (name: string, workMins: number, breakMins: number) => Promise<void>;
+  deleteCustomTemplate: (id: string) => Promise<void>;
+  loadMoreSessions: () => Promise<void>;
   adjustTimerDurations: (workMins: number, breakMins: number) => void;
   setTargetCycles: (cycles: number) => void;
   toggleTimer: () => void;
@@ -127,55 +132,19 @@ const DEFAULT_STARTER_NOTE: PlannerNote = {
   updated_at: new Date().toISOString()
 };
 
-const INITIAL_SANDBOX_NOTES: PlannerNote[] = [
-  {
-    id: 'note-sample-1',
-    user_id: 'user-trial-1',
-    topic: 'IELTS',
-    priority_targets: ['Speaking practice', 'Listening comprehension'],
-    planned_duration_minutes: 45,
-    content: 'Prioritize on Speaking practice and Listening',
-    reflection_notes: 'After finishing my IELTS session, I feel like my speaking section has improved, but my reading feels worse which I need to relearn again.',
-    is_completed: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: 'note-sample-2',
-    user_id: 'user-trial-1',
-    topic: 'JLPT N3',
-    priority_targets: ['Kanji Memorization', 'Grammar Drills'],
-    planned_duration_minutes: 20,
-    content: 'Master N3 Kanji chapter 4 and practice reading comprehension',
-    reflection_notes: '',
-    is_completed: false,
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-    updated_at: new Date(Date.now() - 86400000).toISOString()
-  }
-];
-
-const INITIAL_SANDBOX_SESSIONS: PomodoroSession[] = [
-  {
-    id: 'sess-1',
-    user_id: 'user-trial-1',
-    subject_name: 'IELTS Speaking Practice',
-    duration_minutes: 45,
-    break_minutes: 15,
-    is_completed: true,
-    completed_at: '7:00 PM - 7:45 PM'
-  }
-];
+const guestStarterNote = (): PlannerNote => ({ ...DEFAULT_STARTER_NOTE, id: 'starter-note-guest', user_id: 'guest-traveller', created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+const guestProfile = (): Profile => ({ id: 'guest-traveller', username: 'Traveller', full_name: 'Traveller', avatar_url: '', daily_goal_minutes: 120, exp: 0, level: 1 });
 
 export const useStudyStore = create<StudyState>((set, get) => ({
   isSandboxMode: !isSupabaseConfigured,
   userProfile: {
     id: 'user-trial-1',
-    username: 'Reynard',
-    full_name: 'Reynard Runako',
+    username: 'Traveller',
+    full_name: 'Traveller',
     avatar_url: '',
     daily_goal_minutes: 120,
-    exp: 1250,
-    level: 12
+    exp: 0,
+    level: 1
   },
   
   activeTab: 'dashboard',
@@ -192,17 +161,18 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   showReflectionModal: false,
   pendingReflectionSession: null,
 
-  currentPlannerNote: INITIAL_SANDBOX_NOTES[0],
-  allPlannerNotes: INITIAL_SANDBOX_NOTES,
+  currentPlannerNote: guestStarterNote(),
+  allPlannerNotes: [guestStarterNote()],
   
-  recentSessions: INITIAL_SANDBOX_SESSIONS,
+  recentSessions: [],
+  hasMoreSessions: false,
   
   stats: {
-    totalFocusTimeMinutes: 45,
-    completedSessionsCount: 1,
+    totalFocusTimeMinutes: 0,
+    completedSessionsCount: 0,
     abandonedSessionsCount: 0,
     focusScore: 100,
-    streakDays: 1,
+    streakDays: 0,
     userLevel: 1,
     userExp: 150
   },
@@ -257,6 +227,23 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       isTimerRunning: false,
       timerMode: 'work'
     }));
+  },
+
+  deleteCustomTemplate: async (id) => {
+    const { isSandboxMode } = get();
+    if (!isSandboxMode && isSupabaseConfigured) await deleteSupabaseStudyTemplate(id);
+    set((state) => {
+      const userCustomTemplates = state.userCustomTemplates.filter((template) => template.id !== id);
+      const selectedTemplate = state.selectedTemplate.id === id ? state.systemTemplates[0] : state.selectedTemplate;
+      return { userCustomTemplates, selectedTemplate, timeLeftSeconds: selectedTemplate.work_duration_minutes * 60, isTimerRunning: false };
+    });
+  },
+
+  loadMoreSessions: async () => {
+    const { isSandboxMode, userProfile, recentSessions, hasMoreSessions } = get();
+    if (isSandboxMode || !isSupabaseConfigured || !hasMoreSessions) return;
+    const nextPage = await fetchSupabasePomodoroSessions(userProfile.id, 10, recentSessions.length);
+    set((state) => ({ recentSessions: [...state.recentSessions, ...nextPage], hasMoreSessions: nextPage.length === 10 }));
   },
 
   adjustTimerDurations: (workMins, breakMins) => {
@@ -638,18 +625,11 @@ export const useStudyStore = create<StudyState>((set, get) => ({
 
   resetSandboxData: () => {
     set({
-      userProfile: {
-        id: 'user-trial-1',
-        username: 'Reynard',
-        full_name: 'Reynard Runako',
-        avatar_url: '',
-        daily_goal_minutes: 120,
-        exp: 0,
-        level: 1
-      },
-      currentPlannerNote: INITIAL_SANDBOX_NOTES[0],
-      allPlannerNotes: INITIAL_SANDBOX_NOTES,
-      recentSessions: INITIAL_SANDBOX_SESSIONS,
+      userProfile: guestProfile(),
+      currentPlannerNote: guestStarterNote(),
+      allPlannerNotes: [guestStarterNote()],
+      recentSessions: [],
+      hasMoreSessions: false,
       userCustomTemplates: [],
       selectedTemplate: DEFAULT_TEMPLATES[0],
       timeLeftSeconds: DEFAULT_TEMPLATES[0].work_duration_minutes * 60,
@@ -657,11 +637,11 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       timerMode: 'work',
       completedCycles: 0,
       stats: {
-        totalFocusTimeMinutes: 45,
-        completedSessionsCount: 1,
+        totalFocusTimeMinutes: 0,
+        completedSessionsCount: 0,
         abandonedSessionsCount: 0,
         focusScore: 100,
-        streakDays: 1,
+        streakDays: 0,
         userLevel: 1,
         userExp: 0
       }
@@ -678,18 +658,21 @@ export const useStudyStore = create<StudyState>((set, get) => ({
 
       if (!userId) return;
 
-      const [profile, notes, templates, sessions, dashboardView] = await Promise.all([
-        fetchSupabaseProfile(userId),
+      let profile = await fetchSupabaseProfile(userId);
+      const usernameFromAuth = authUser.user?.user_metadata?.username || authUser.user?.email?.split('@')[0] || 'Traveller';
+      const fullNameFromAuth = authUser.user?.user_metadata?.full_name || usernameFromAuth;
+      if (!profile) {
+        profile = await ensureSupabaseProfile({ id: userId, username: usernameFromAuth, full_name: fullNameFromAuth, daily_goal_minutes: 120, exp: 0, level: 1 });
+      }
+
+      const [notes, templates, sessions, dashboardView] = await Promise.all([
         fetchSupabasePlannerNotes(userId),
         fetchSupabaseStudyTemplates(userId),
-        fetchSupabasePomodoroSessions(userId),
+        fetchSupabasePomodoroSessions(userId, 10),
         fetchSupabaseDashboardView(userId)
       ]);
 
       set((state) => {
-        const usernameFromAuth = authUser.user?.user_metadata?.username || authUser.user?.email?.split('@')[0] || 'Explorer';
-        const fullNameFromAuth = authUser.user?.user_metadata?.full_name || usernameFromAuth;
-
         const updatedProfile: Profile = profile ? {
           ...profile,
           username: profile.username || usernameFromAuth,
@@ -729,7 +712,10 @@ export const useStudyStore = create<StudyState>((set, get) => ({
           focusScore: 100,
           streakDays: dashboardView?.streak_days || 0,
           userLevel: dashboardView?.level || 1,
-          userExp: dashboardView?.exp_in_level || 0
+          userExp: dashboardView?.exp_in_level || 0,
+          expToNextLevel: dashboardView?.exp_to_next_level || 200,
+          todayFocusMinutes: dashboardView?.today_focus_minutes || 0,
+          dailyGoalMinutes: dashboardView?.daily_goal_minutes || updatedProfile.daily_goal_minutes
         };
 
         return {
@@ -740,6 +726,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
           systemTemplates: updatedTemplates.length > 0 ? updatedTemplates.filter(t => t.is_system_default) : state.systemTemplates,
           userCustomTemplates: updatedTemplates.filter(t => !t.is_system_default),
           recentSessions: updatedSessions,
+          hasMoreSessions: updatedSessions.length === 10,
           stats: updatedStats
         };
       });

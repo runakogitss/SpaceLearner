@@ -14,6 +14,24 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
+/** Uploads an image chosen from the local computer and returns its stable URL. */
+export async function uploadSupabaseAvatar(userId: string, file: File): Promise<string | null> {
+  if (!supabase) return null;
+  const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+  const isJpeg = extension === 'jpg' || extension === 'jpeg';
+  const isAllowedImage = isJpeg || ['png', 'webp', 'gif'].includes(extension);
+  if (!isAllowedImage || file.size > 5 * 1024 * 1024) return null;
+  const path = `${userId}/avatar.${extension}`;
+  const contentType = isJpeg ? 'image/jpeg' : (file.type || `image/${extension}`);
+  const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType, cacheControl: '3600' });
+  if (error) {
+    console.error('Supabase avatar upload error:', error.message);
+    return null;
+  }
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+  return `${data.publicUrl}?v=${Date.now()}`;
+}
+
 // ====================================================================
 // SUPABASE DATABASE API HELPERS
 // ====================================================================
@@ -53,6 +71,23 @@ export async function updateSupabaseProfile(userId: string, fields: Partial<Prof
 
   if (error) {
     console.error('Supabase update profile error:', error.message);
+    return null;
+  }
+  return data as Profile;
+}
+
+/** Create a missing profile row for an authenticated account (the auth trigger is the
+ * normal path, but this safely repairs accounts created before the trigger existed). */
+export async function ensureSupabaseProfile(profile: Profile): Promise<Profile | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(profile, { onConflict: 'id', ignoreDuplicates: true })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Supabase ensure profile error:', error.message);
     return null;
   }
   return data as Profile;
@@ -169,6 +204,16 @@ export async function insertSupabaseStudyTemplate(template: Omit<StudyTemplate, 
   return data as StudyTemplate;
 }
 
+export async function deleteSupabaseStudyTemplate(id: string): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.from('study_templates').delete().eq('id', id);
+  if (error) {
+    console.error('Supabase delete template error:', error.message);
+    return false;
+  }
+  return true;
+}
+
 /**
  * Insert a completed pomodoro session (Triggers automatic EXP & Level computation in Postgres!)
  */
@@ -190,14 +235,14 @@ export async function insertSupabasePomodoroSession(session: Omit<PomodoroSessio
 /**
  * Fetch recent pomodoro sessions for user
  */
-export async function fetchSupabasePomodoroSessions(userId: string, limit = 10): Promise<PomodoroSession[]> {
+export async function fetchSupabasePomodoroSessions(userId: string, limit = 10, offset = 0): Promise<PomodoroSession[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('pomodoro_sessions')
     .select('*')
     .eq('user_id', userId)
     .order('completed_at', { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
 
   if (error || !data) {
     console.warn('Supabase fetch sessions error:', error?.message);

@@ -1,9 +1,9 @@
 import React from 'react';
-import { Headphones, BookOpen, Calculator, MessageSquare, CheckCircle, XCircle } from 'lucide-react';
+import { Headphones, BookOpen, Calculator, MessageSquare, CheckCircle, XCircle, History } from 'lucide-react';
 import { useStudyStore } from '../../store/useStudyStore';
 
 export const RecentSessions: React.FC = () => {
-  const { recentSessions } = useStudyStore();
+  const { recentSessions, hasMoreSessions, loadMoreSessions, setActiveTab } = useStudyStore();
 
   const getSubjectIcon = (name: string) => {
     if (name.toLowerCase().includes('speaking')) return MessageSquare;
@@ -24,11 +24,12 @@ export const RecentSessions: React.FC = () => {
             History of recent Pomodoro study blocks
           </p>
         </div>
-        <button className="text-xs font-semibold text-purple-300 hover:text-white transition-colors">
+        <button onClick={() => setActiveTab('statistics')} className="text-xs font-semibold text-purple-300 hover:text-white transition-colors">
           View all
         </button>
       </div>
 
+      {recentSessions.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/30 px-5 py-10 text-center"><History className="mx-auto h-7 w-7 text-purple-400" /><p className="mt-3 text-sm font-semibold text-white">No completed sessions yet</p><p className="mt-1 text-xs text-cosmic-textMuted">Start a focus timer to build your study history.</p></div> : <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {recentSessions.map((session) => {
           const Icon = getSubjectIcon(session.subject_name);
@@ -72,6 +73,8 @@ export const RecentSessions: React.FC = () => {
           );
         })}
       </div>
+      {hasMoreSessions && <button onClick={loadMoreSessions} className="mt-5 w-full rounded-xl border border-purple-500/30 bg-purple-950/30 py-2.5 text-xs font-bold tracking-wide text-purple-200 hover:bg-purple-900/50">LOAD MORE SESSIONS</button>}
+      </>}
     </div>
   );
 };

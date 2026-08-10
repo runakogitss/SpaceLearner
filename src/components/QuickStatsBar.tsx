@@ -8,26 +8,29 @@ export const QuickStatsBar: React.FC = () => {
   const hours = Math.floor(stats.totalFocusTimeMinutes / 60);
   const mins = stats.totalFocusTimeMinutes % 60;
   const formattedTime = `${hours}h ${mins}m`;
+  const goal = stats.dailyGoalMinutes || 120;
+  const today = stats.todayFocusMinutes || 0;
+  const expToNext = stats.expToNextLevel || 200;
 
   const statCards = [
     {
-      title: 'TOTAL FOCUS TIME',
-      value: formattedTime,
-      subtext: 'This Week',
+      title: 'TODAY’S GOAL',
+      value: `${today} / ${goal}m`,
+      subtext: `${Math.min(100, Math.round((today / goal) * 100))}% complete`,
       icon: Clock,
       iconBg: 'bg-indigo-950/80 text-indigo-400 border-indigo-500/30'
     },
     {
-      title: 'COMPLETED SESSIONS',
-      value: stats.completedSessionsCount.toString(),
-      subtext: 'This Week',
+      title: 'LEVEL PROGRESS',
+      value: `${stats.userExp} / ${expToNext} XP`,
+      subtext: `Level ${stats.userLevel}`,
       icon: Target,
       iconBg: 'bg-purple-950/80 text-purple-400 border-purple-500/30'
     },
     {
-      title: 'FOCUS SCORE',
-      value: `${stats.focusScore}%`,
-      subtext: stats.focusScore >= 80 ? 'Great Focus!' : 'Needs Push',
+      title: 'TOTAL FOCUS TIME',
+      value: formattedTime,
+      subtext: `${stats.completedSessionsCount} sessions`,
       icon: Gauge,
       iconBg: 'bg-emerald-950/80 text-emerald-400 border-emerald-500/30'
     },

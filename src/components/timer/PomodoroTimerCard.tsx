@@ -11,7 +11,8 @@ import {
   Check, 
   Clock, 
   Coffee, 
-  RefreshCw 
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import { useStudyStore } from '../../store/useStudyStore';
 
@@ -22,6 +23,7 @@ export const PomodoroTimerCard: React.FC = () => {
     userCustomTemplates,
     selectTemplate, 
     createCustomTemplate,
+    deleteCustomTemplate,
     adjustTimerDurations,
     timeLeftSeconds, 
     isTimerRunning, 
@@ -135,6 +137,7 @@ export const PomodoroTimerCard: React.FC = () => {
           >
             <Sliders className="w-4 h-4" />
           </button>
+          {!selectedTemplate.is_system_default && <button onClick={() => deleteCustomTemplate(selectedTemplate.id)} className="p-1.5 rounded-xl border border-rose-500/30 bg-rose-950/40 text-rose-300 hover:bg-rose-900/60" title="Delete custom preset"><Trash2 className="w-4 h-4" /></button>}
 
           <button
             onClick={() => setShowCustomModal(true)}
