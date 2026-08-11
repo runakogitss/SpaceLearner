@@ -414,7 +414,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
     }
   },
 
-  // Synchronizes Session Completion -> Planner Note Completion + Stats + Reflection Popup
+  // Synchronizes Session Completion -> Single Source of EXP
   completeCurrentSession: async () => {
     const { selectedTemplate, timerMode, completedCycles, stats, recentSessions, currentPlannerNote, isSandboxMode, userProfile } = get();
     
@@ -422,6 +422,9 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       const activeNote = currentPlannerNote || DEFAULT_STARTER_NOTE;
       const topicName = activeNote.topic;
       const workDurationMins = selectedTemplate.work_duration_minutes;
+      
+      // EXP is calculated strictly by exp_for_session(duration):
+      // < 25m -> 50 EXP, 25-44m -> 100 EXP, 45+m -> 150 EXP
       const earnedExp = calculateExpForSession(workDurationMins);
 
       const sessionData = {
@@ -472,7 +475,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         await updateSupabasePlannerNote(activeNote.id, { is_completed: true });
       }
 
-      // Calculate EXP & Leveling progression dynamically
+      // Calculate total EXP & Level strictly according to exp_for_level()
       const currentTotalExp = (userProfile.exp || 0) + earnedExp;
       const levelInfo = calculateLevelFromExp(currentTotalExp);
       const newStreak = calculateStreakFromSessions(updatedRecentSessions);
@@ -526,7 +529,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   },
 
   submitReflectionAndFinish: async (reflectionText) => {
-    const { currentPlannerNote, isSandboxMode, userProfile, stats } = get();
+    const { currentPlannerNote, isSandboxMode } = get();
     const activeNote = currentPlannerNote || DEFAULT_STARTER_NOTE;
 
     const updatedNote = {
@@ -543,32 +546,12 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       });
     }
 
-    // Award +25 EXP bonus for completing a post-study reflection note!
-    const reflectionBonusExp = 25;
-    const newTotalExp = (userProfile.exp || 0) + reflectionBonusExp;
-    const levelInfo = calculateLevelFromExp(newTotalExp);
-
-    const updatedProfile: Profile = {
-      ...userProfile,
-      exp: newTotalExp,
-      level: levelInfo.level
-    };
-
-    const updatedStats: FocusStats = {
-      ...stats,
-      userLevel: levelInfo.level,
-      userExp: levelInfo.expInLevel,
-      expToNextLevel: levelInfo.expToNextLevel
-    };
-
     set((state) => {
       const nextState = {
         currentPlannerNote: updatedNote,
         allPlannerNotes: state.allPlannerNotes.map(n => n.id === updatedNote.id ? updatedNote : n),
         showReflectionModal: false,
-        pendingReflectionSession: null,
-        userProfile: updatedProfile,
-        stats: updatedStats
+        pendingReflectionSession: null
       };
 
       if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });

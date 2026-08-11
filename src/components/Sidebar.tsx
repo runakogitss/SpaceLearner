@@ -21,6 +21,9 @@ export const Sidebar: React.FC = () => {
     { id: 'settings', label: 'SETTINGS', icon: Settings },
   ] as const;
 
+  const expToNext = stats.expToNextLevel || 200;
+  const expPercent = Math.min(100, Math.max(0, (stats.userExp / expToNext) * 100));
+
   return (
     <aside className="w-64 bg-cosmic-card/90 backdrop-blur-xl border-r border-cosmic-border flex flex-col justify-between p-5 min-h-screen">
       {/* Brand Header */}
@@ -83,12 +86,12 @@ export const Sidebar: React.FC = () => {
           <div className="bg-slate-900/80 rounded-xl p-2.5 border border-white/5">
             <div className="flex justify-between items-center text-[10px] font-semibold mb-1.5">
               <span className="text-purple-300">LEVEL {stats.userLevel}</span>
-              <span className="text-slate-400">{stats.userExp.toLocaleString()} / 2,000 EXP</span>
+              <span className="text-slate-400">{stats.userExp.toLocaleString()} / {expToNext.toLocaleString()} EXP</span>
             </div>
             <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-gradient-to-r from-indigo-500 to-purple-400 rounded-full transition-all duration-500"
-                style={{ width: `${(stats.userExp / 2000) * 100}%` }}
+                style={{ width: `${expPercent}%` }}
               />
             </div>
           </div>
