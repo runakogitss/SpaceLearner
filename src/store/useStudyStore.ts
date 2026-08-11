@@ -24,6 +24,103 @@ import {
   ensureSupabaseProfile
 } from '../lib/supabase';
 
+// ====================================================================
+// GAMIFICATION HELPERS & PERSISTENCE
+// ====================================================================
+const SANDBOX_STORAGE_KEY = 'space_learner_sandbox_state_v1';
+
+export function calculateExpForSession(durationMins: number): number {
+  if (durationMins < 25) return 50;
+  if (durationMins < 45) return 100;
+  return 150;
+}
+
+export function calculateLevelFromExp(totalExp: number): { level: number; expInLevel: number; expToNextLevel: number } {
+  let lvl = 1;
+  let accumulated = 0;
+  let threshold = lvl * 200; // Level N -> N+1 requires N * 200 EXP
+
+  while (accumulated + threshold <= totalExp && lvl < 1000) {
+    accumulated += threshold;
+    lvl++;
+    threshold = lvl * 200;
+  }
+
+  const expInLevel = totalExp - accumulated;
+  const expToNextLevel = threshold;
+
+  return { level: lvl, expInLevel, expToNextLevel };
+}
+
+export function calculateStreakFromSessions(sessions: PomodoroSession[]): number {
+  const completedSessions = sessions.filter(s => s.is_completed);
+  if (completedSessions.length === 0) return 0;
+
+  const datesSet = new Set(
+    completedSessions.map(s => {
+      if (s.completed_at && s.completed_at.includes('T')) {
+        return s.completed_at.split('T')[0];
+      }
+      return new Date().toISOString().split('T')[0];
+    })
+  );
+
+  const sortedDates = Array.from(datesSet).sort().reverse();
+  const todayStr = new Date().toISOString().split('T')[0];
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+  if (sortedDates[0] !== todayStr && sortedDates[0] !== yesterdayStr) {
+    return 0;
+  }
+
+  let streak = 0;
+  let checkDate = new Date(sortedDates[0]);
+
+  for (const dateStr of sortedDates) {
+    const d = new Date(dateStr);
+    const diffTime = Math.abs(checkDate.getTime() - d.getTime());
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 1) {
+      streak++;
+      checkDate = d;
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+}
+
+function saveSandboxState(state: Partial<StudyState>) {
+  try {
+    const payload = {
+      userProfile: state.userProfile,
+      currentPlannerNote: state.currentPlannerNote,
+      allPlannerNotes: state.allPlannerNotes,
+      recentSessions: state.recentSessions,
+      userCustomTemplates: state.userCustomTemplates,
+      stats: state.stats
+    };
+    localStorage.setItem(SANDBOX_STORAGE_KEY, JSON.stringify(payload));
+  } catch (err) {
+    console.warn('Failed to save sandbox state to localStorage:', err);
+  }
+}
+
+function loadSandboxState() {
+  try {
+    const raw = localStorage.getItem(SANDBOX_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn('Failed to load sandbox state from localStorage:', err);
+    return null;
+  }
+}
+
 interface StudyState {
   // Mode & Auth
   isSandboxMode: boolean;
@@ -135,9 +232,11 @@ const DEFAULT_STARTER_NOTE: PlannerNote = {
 const guestStarterNote = (): PlannerNote => ({ ...DEFAULT_STARTER_NOTE, id: 'starter-note-guest', user_id: 'guest-traveller', created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
 const guestProfile = (): Profile => ({ id: 'guest-traveller', username: 'Traveller', full_name: 'Traveller', avatar_url: '', daily_goal_minutes: 120, exp: 0, level: 1 });
 
+const savedSandbox = loadSandboxState();
+
 export const useStudyStore = create<StudyState>((set, get) => ({
   isSandboxMode: !isSupabaseConfigured,
-  userProfile: {
+  userProfile: savedSandbox?.userProfile || {
     id: 'user-trial-1',
     username: 'Traveller',
     full_name: 'Traveller',
@@ -150,7 +249,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   activeTab: 'dashboard',
   
   systemTemplates: DEFAULT_TEMPLATES,
-  userCustomTemplates: [],
+  userCustomTemplates: savedSandbox?.userCustomTemplates || [],
   selectedTemplate: DEFAULT_TEMPLATES[0],
   timeLeftSeconds: DEFAULT_TEMPLATES[0].work_duration_minutes * 60,
   isTimerRunning: false,
@@ -161,20 +260,23 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   showReflectionModal: false,
   pendingReflectionSession: null,
 
-  currentPlannerNote: guestStarterNote(),
-  allPlannerNotes: [guestStarterNote()],
+  currentPlannerNote: savedSandbox?.currentPlannerNote || guestStarterNote(),
+  allPlannerNotes: savedSandbox?.allPlannerNotes || [guestStarterNote()],
   
-  recentSessions: [],
+  recentSessions: savedSandbox?.recentSessions || [],
   hasMoreSessions: false,
   
-  stats: {
+  stats: savedSandbox?.stats || {
     totalFocusTimeMinutes: 0,
     completedSessionsCount: 0,
     abandonedSessionsCount: 0,
     focusScore: 100,
     streakDays: 0,
     userLevel: 1,
-    userExp: 150
+    userExp: 0,
+    expToNextLevel: 200,
+    todayFocusMinutes: 0,
+    dailyGoalMinutes: 120
   },
 
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -220,13 +322,17 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       newTpl = { ...templateData, id: `custom-tpl-${Date.now()}` };
     }
 
-    set((state) => ({
-      userCustomTemplates: [newTpl, ...state.userCustomTemplates],
-      selectedTemplate: newTpl,
-      timeLeftSeconds: workMins * 60,
-      isTimerRunning: false,
-      timerMode: 'work'
-    }));
+    set((state) => {
+      const nextState = {
+        userCustomTemplates: [newTpl, ...state.userCustomTemplates],
+        selectedTemplate: newTpl,
+        timeLeftSeconds: workMins * 60,
+        isTimerRunning: false,
+        timerMode: 'work' as const
+      };
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
+    });
   },
 
   deleteCustomTemplate: async (id) => {
@@ -235,7 +341,9 @@ export const useStudyStore = create<StudyState>((set, get) => ({
     set((state) => {
       const userCustomTemplates = state.userCustomTemplates.filter((template) => template.id !== id);
       const selectedTemplate = state.selectedTemplate.id === id ? state.systemTemplates[0] : state.selectedTemplate;
-      return { userCustomTemplates, selectedTemplate, timeLeftSeconds: selectedTemplate.work_duration_minutes * 60, isTimerRunning: false };
+      const nextState = { userCustomTemplates, selectedTemplate, timeLeftSeconds: selectedTemplate.work_duration_minutes * 60, isTimerRunning: false };
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
     });
   },
 
@@ -263,13 +371,17 @@ export const useStudyStore = create<StudyState>((set, get) => ({
 
     const newTime = timerMode === 'work' ? updatedTpl.work_duration_minutes * 60 : updatedTpl.break_duration_minutes * 60;
 
-    set((state) => ({
-      selectedTemplate: updatedTpl,
-      currentPlannerNote: updatedNote,
-      allPlannerNotes: state.allPlannerNotes.map(n => n.id === updatedNote.id ? updatedNote : n),
-      timeLeftSeconds: newTime,
-      isTimerRunning: false
-    }));
+    set((state) => {
+      const nextState = {
+        selectedTemplate: updatedTpl,
+        currentPlannerNote: updatedNote,
+        allPlannerNotes: state.allPlannerNotes.map(n => n.id === updatedNote.id ? updatedNote : n),
+        timeLeftSeconds: newTime,
+        isTimerRunning: false
+      };
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
+    });
   },
 
   setTargetCycles: (cycles) => {
@@ -309,16 +421,20 @@ export const useStudyStore = create<StudyState>((set, get) => ({
     if (timerMode === 'work') {
       const activeNote = currentPlannerNote || DEFAULT_STARTER_NOTE;
       const topicName = activeNote.topic;
+      const workDurationMins = selectedTemplate.work_duration_minutes;
+      const earnedExp = calculateExpForSession(workDurationMins);
 
       const sessionData = {
         user_id: isSandboxMode ? 'user-trial-1' : userProfile.id,
         note_id: activeNote.id.startsWith('note-sample-') || activeNote.id.startsWith('starter-note-') ? null : activeNote.id,
         template_id: selectedTemplate.id.startsWith('tpl-') ? null : selectedTemplate.id,
         subject_name: `${topicName} Practice`,
-        duration_minutes: selectedTemplate.work_duration_minutes,
+        duration_minutes: workDurationMins,
         break_minutes: selectedTemplate.break_duration_minutes,
         cycles_completed: 1,
-        is_completed: true
+        is_completed: true,
+        exp_earned: earnedExp,
+        completed_at: new Date().toISOString()
       };
 
       let newSession: PomodoroSession;
@@ -331,19 +447,18 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         } else {
           newSession = {
             ...sessionData,
-            id: `sess-${Date.now()}`,
-            completed_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            id: `sess-${Date.now()}`
           };
         }
       } else {
         newSession = {
           ...sessionData,
-          id: `sess-${Date.now()}`,
-          completed_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          id: `sess-${Date.now()}`
         };
       }
 
-      const newTotalMins = stats.totalFocusTimeMinutes + selectedTemplate.work_duration_minutes;
+      const updatedRecentSessions = [newSession, ...recentSessions];
+      const newTotalMins = stats.totalFocusTimeMinutes + workDurationMins;
       const newCompletedCount = stats.completedSessionsCount + 1;
       const newScore = Math.round((newCompletedCount / (newCompletedCount + stats.abandonedSessionsCount)) * 100);
 
@@ -357,27 +472,50 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         await updateSupabasePlannerNote(activeNote.id, { is_completed: true });
       }
 
-      set((state) => ({
-        timerMode: 'break',
-        timeLeftSeconds: selectedTemplate.break_duration_minutes * 60,
-        isTimerRunning: false,
-        completedCycles: completedCycles + 1,
-        recentSessions: [newSession, ...recentSessions.slice(0, 5)],
-        currentPlannerNote: updatedNote,
-        allPlannerNotes: state.allPlannerNotes.map(n => n.id === updatedNote.id ? updatedNote : n),
-        showReflectionModal: true,
-        pendingReflectionSession: {
-          topic: topicName,
-          duration: selectedTemplate.work_duration_minutes
-        },
-        stats: {
-          ...stats,
-          totalFocusTimeMinutes: newTotalMins,
-          completedSessionsCount: newCompletedCount,
-          focusScore: newScore,
-          userExp: stats.userExp + 150
-        }
-      }));
+      // Calculate EXP & Leveling progression dynamically
+      const currentTotalExp = (userProfile.exp || 0) + earnedExp;
+      const levelInfo = calculateLevelFromExp(currentTotalExp);
+      const newStreak = calculateStreakFromSessions(updatedRecentSessions);
+
+      const updatedProfile: Profile = {
+        ...userProfile,
+        exp: currentTotalExp,
+        level: levelInfo.level
+      };
+
+      const updatedStats: FocusStats = {
+        ...stats,
+        totalFocusTimeMinutes: newTotalMins,
+        todayFocusMinutes: (stats.todayFocusMinutes || 0) + workDurationMins,
+        completedSessionsCount: newCompletedCount,
+        focusScore: newScore,
+        streakDays: newStreak,
+        userLevel: levelInfo.level,
+        userExp: levelInfo.expInLevel,
+        expToNextLevel: levelInfo.expToNextLevel
+      };
+
+      set((state) => {
+        const nextState = {
+          timerMode: 'break' as const,
+          timeLeftSeconds: selectedTemplate.break_duration_minutes * 60,
+          isTimerRunning: false,
+          completedCycles: completedCycles + 1,
+          recentSessions: updatedRecentSessions.slice(0, 10),
+          currentPlannerNote: updatedNote,
+          allPlannerNotes: state.allPlannerNotes.map(n => n.id === updatedNote.id ? updatedNote : n),
+          showReflectionModal: true,
+          pendingReflectionSession: {
+            topic: topicName,
+            duration: workDurationMins
+          },
+          userProfile: updatedProfile,
+          stats: updatedStats
+        };
+
+        if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+        return nextState;
+      });
     } else {
       set({
         timerMode: 'work',
@@ -388,7 +526,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   },
 
   submitReflectionAndFinish: async (reflectionText) => {
-    const { currentPlannerNote, isSandboxMode } = get();
+    const { currentPlannerNote, isSandboxMode, userProfile, stats } = get();
     const activeNote = currentPlannerNote || DEFAULT_STARTER_NOTE;
 
     const updatedNote = {
@@ -405,12 +543,37 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       });
     }
 
-    set((state) => ({
-      currentPlannerNote: updatedNote,
-      allPlannerNotes: state.allPlannerNotes.map(n => n.id === updatedNote.id ? updatedNote : n),
-      showReflectionModal: false,
-      pendingReflectionSession: null
-    }));
+    // Award +25 EXP bonus for completing a post-study reflection note!
+    const reflectionBonusExp = 25;
+    const newTotalExp = (userProfile.exp || 0) + reflectionBonusExp;
+    const levelInfo = calculateLevelFromExp(newTotalExp);
+
+    const updatedProfile: Profile = {
+      ...userProfile,
+      exp: newTotalExp,
+      level: levelInfo.level
+    };
+
+    const updatedStats: FocusStats = {
+      ...stats,
+      userLevel: levelInfo.level,
+      userExp: levelInfo.expInLevel,
+      expToNextLevel: levelInfo.expToNextLevel
+    };
+
+    set((state) => {
+      const nextState = {
+        currentPlannerNote: updatedNote,
+        allPlannerNotes: state.allPlannerNotes.map(n => n.id === updatedNote.id ? updatedNote : n),
+        showReflectionModal: false,
+        pendingReflectionSession: null,
+        userProfile: updatedProfile,
+        stats: updatedStats
+      };
+
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
+    });
   },
 
   closeReflectionModal: () => {
@@ -454,98 +617,102 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       };
     }
 
-    const allTpls = [...userCustomTemplates, ...systemTemplates];
-    let matchedTpl = allTpls.find(t => t.name.toLowerCase().includes(topic.toLowerCase()));
-    
-    if (!matchedTpl) {
-      matchedTpl = {
-        id: `tpl-synced-${Date.now()}`,
-        name: `${newNote.topic} Plan Timer`,
-        work_duration_minutes: newNote.planned_duration_minutes,
-        break_duration_minutes: Math.max(5, Math.round(newNote.planned_duration_minutes / 4)),
-        cycles: 4,
-        is_system_default: false
-      };
-      set((state) => ({
-        userCustomTemplates: [matchedTpl!, ...state.userCustomTemplates]
-      }));
-    }
+    const allTemplates = [...systemTemplates, ...userCustomTemplates];
+    const matchingTemplate = allTemplates.find(t => 
+      t.name.toLowerCase().includes(topic.toLowerCase()) || 
+      topic.toLowerCase().includes(t.name.toLowerCase())
+    ) || {
+      id: `custom-synced-${Date.now()}`,
+      name: `${newNote.topic} Practice`,
+      work_duration_minutes: newNote.planned_duration_minutes,
+      break_duration_minutes: 5,
+      cycles: 4,
+      is_system_default: false
+    };
 
-    set((state) => ({
-      allPlannerNotes: [newNote, ...state.allPlannerNotes.filter(n => !n.id.startsWith('starter-note-'))],
-      currentPlannerNote: newNote,
-      selectedTemplate: matchedTpl!,
-      timeLeftSeconds: matchedTpl!.work_duration_minutes * 60,
-      isTimerRunning: false,
-      timerMode: 'work'
-    }));
+    set((state) => {
+      const nextState = {
+        allPlannerNotes: [newNote, ...state.allPlannerNotes],
+        currentPlannerNote: newNote,
+        selectedTemplate: matchingTemplate,
+        timeLeftSeconds: matchingTemplate.work_duration_minutes * 60,
+        isTimerRunning: false,
+        timerMode: 'work' as const
+      };
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
+    });
   },
 
   selectPlannerNote: (id) => {
     const { allPlannerNotes, systemTemplates, userCustomTemplates } = get();
-    const note = allPlannerNotes.find(n => n.id === id) || allPlannerNotes[0] || DEFAULT_STARTER_NOTE;
+    const note = allPlannerNotes.find(n => n.id === id);
+    if (!note) return;
 
-    const allTpls = [...userCustomTemplates, ...systemTemplates];
-    let matchedTpl = allTpls.find(t => 
-      t.name.toLowerCase().includes(note.topic.toLowerCase()) ||
+    const allTemplates = [...systemTemplates, ...userCustomTemplates];
+    const matchingTemplate = allTemplates.find(t => 
+      t.name.toLowerCase().includes(note.topic.toLowerCase()) || 
       note.topic.toLowerCase().includes(t.name.toLowerCase())
-    );
-
-    if (!matchedTpl) {
-      matchedTpl = {
-        id: `tpl-${note.id}`,
-        name: `${note.topic} Timer`,
-        work_duration_minutes: note.planned_duration_minutes,
-        break_duration_minutes: Math.max(5, Math.round(note.planned_duration_minutes / 4)),
-        cycles: 4,
-        is_system_default: false
-      };
-    }
+    ) || {
+      id: `custom-selected-${Date.now()}`,
+      name: `${note.topic} Practice`,
+      work_duration_minutes: note.planned_duration_minutes,
+      break_duration_minutes: 5,
+      cycles: 4,
+      is_system_default: false
+    };
 
     set({
       currentPlannerNote: note,
-      selectedTemplate: matchedTpl,
-      timeLeftSeconds: matchedTpl.work_duration_minutes * 60,
+      selectedTemplate: matchingTemplate,
+      timeLeftSeconds: matchingTemplate.work_duration_minutes * 60,
       isTimerRunning: false,
       timerMode: 'work'
     });
   },
 
   deletePlannerNote: async (id) => {
-    const { isSandboxMode } = get();
+    const { isSandboxMode, allPlannerNotes, currentPlannerNote } = get();
+    if (allPlannerNotes.length <= 1) return;
+
     if (!isSandboxMode && isSupabaseConfigured && !id.startsWith('note-sample-') && !id.startsWith('starter-note-')) {
       await deleteSupabasePlannerNote(id);
     }
 
+    const remaining = allPlannerNotes.filter(n => n.id !== id);
+    const newCurrent = currentPlannerNote.id === id ? remaining[0] : currentPlannerNote;
+
     set((state) => {
-      const filtered = state.allPlannerNotes.filter(n => n.id !== id);
-      const nextNote = filtered[0] || DEFAULT_STARTER_NOTE;
-      const finalNotes = filtered.length > 0 ? filtered : [DEFAULT_STARTER_NOTE];
-      return {
-        allPlannerNotes: finalNotes,
-        currentPlannerNote: nextNote
+      const nextState = {
+        allPlannerNotes: remaining,
+        currentPlannerNote: newCurrent
       };
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
     });
   },
 
   finishStudyPlan: async (id) => {
     const { isSandboxMode, currentPlannerNote } = get();
-    const activeNote = currentPlannerNote || DEFAULT_STARTER_NOTE;
+    const noteToFinish = currentPlannerNote.id === id ? currentPlannerNote : DEFAULT_STARTER_NOTE;
+    
+    const updated = {
+      ...noteToFinish,
+      is_completed: true,
+      updated_at: new Date().toISOString()
+    };
 
     if (!isSandboxMode && isSupabaseConfigured && !id.startsWith('note-sample-') && !id.startsWith('starter-note-')) {
       await updateSupabasePlannerNote(id, { is_completed: true });
     }
 
     set((state) => {
-      const updated = {
-        ...activeNote,
-        is_completed: true,
-        updated_at: new Date().toISOString()
-      };
-      return {
+      const nextState = {
         currentPlannerNote: updated,
-        allPlannerNotes: state.allPlannerNotes.map(n => n.id === updated.id ? updated : n)
+        allPlannerNotes: state.allPlannerNotes.map(n => n.id === id ? updated : n)
       };
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
     });
   },
 
@@ -563,21 +730,12 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         ...fields,
         updated_at: new Date().toISOString()
       };
-
-      let updatedTpl = state.selectedTemplate;
-      if (fields.planned_duration_minutes) {
-        updatedTpl = {
-          ...updatedTpl,
-          work_duration_minutes: fields.planned_duration_minutes
-        };
-      }
-
-      return {
+      const nextState = {
         currentPlannerNote: updated,
-        selectedTemplate: updatedTpl,
-        timeLeftSeconds: updatedTpl.work_duration_minutes * 60,
         allPlannerNotes: state.allPlannerNotes.map(n => n.id === updated.id ? updated : n)
       };
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
     });
   },
 
@@ -595,10 +753,12 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         reflection_notes: text,
         updated_at: new Date().toISOString()
       };
-      return {
+      const nextState = {
         currentPlannerNote: updated,
         allPlannerNotes: state.allPlannerNotes.map(n => n.id === updated.id ? updated : n)
       };
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
     });
   },
 
@@ -608,12 +768,16 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       await updateSupabaseProfile(userProfile.id, profileData);
     }
 
-    set((state) => ({
-      userProfile: {
-        ...state.userProfile,
-        ...profileData
-      }
-    }));
+    set((state) => {
+      const nextState = {
+        userProfile: {
+          ...state.userProfile,
+          ...profileData
+        }
+      };
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
+    });
   },
 
   toggleSandboxMode: (enabled) => {
@@ -624,6 +788,12 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   },
 
   resetSandboxData: () => {
+    try {
+      localStorage.removeItem(SANDBOX_STORAGE_KEY);
+    } catch (e) {
+      console.warn('Failed to clear sandbox storage:', e);
+    }
+
     set({
       userProfile: guestProfile(),
       currentPlannerNote: guestStarterNote(),
@@ -643,7 +813,10 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         focusScore: 100,
         streakDays: 0,
         userLevel: 1,
-        userExp: 0
+        userExp: 0,
+        expToNextLevel: 200,
+        todayFocusMinutes: 0,
+        dailyGoalMinutes: 120
       }
     });
   },

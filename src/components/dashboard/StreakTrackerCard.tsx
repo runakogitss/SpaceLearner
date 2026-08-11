@@ -3,16 +3,36 @@ import { Flame, Check } from 'lucide-react';
 import { useStudyStore } from '../../store/useStudyStore';
 
 export const StreakTrackerCard: React.FC = () => {
-  const { stats } = useStudyStore();
-  const weekDays = [
-    { day: 'M', active: true },
-    { day: 'T', active: true },
-    { day: 'W', active: true },
-    { day: 'T', active: true },
-    { day: 'F', active: true },
-    { day: 'S', active: true },
-    { day: 'S', active: false },
-  ];
+  const { stats, recentSessions } = useStudyStore();
+
+  // Get current Monday-Sunday dates of the week
+  const today = new Date();
+  const currentDayOfWeek = today.getDay() === 0 ? 6 : today.getDay() - 1; // 0 = Mon, 6 = Sun
+  
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - currentDayOfWeek);
+
+  const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const weekDays = dayLabels.map((day, idx) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + idx);
+    const dateStr = d.toISOString().split('T')[0];
+
+    // Check if user completed a session on this date
+    const hasSession = recentSessions.some(s => {
+      if (!s.is_completed) return false;
+      if (s.completed_at && s.completed_at.includes('T')) {
+        return s.completed_at.split('T')[0] === dateStr;
+      }
+      return dateStr === today.toISOString().split('T')[0];
+    });
+
+    return {
+      day,
+      date: dateStr,
+      active: hasSession
+    };
+  });
 
   return (
     <div className="bg-cosmic-card/90 border border-cosmic-border rounded-3xl p-5 shadow-glow-card mb-4">
@@ -43,7 +63,7 @@ export const StreakTrackerCard: React.FC = () => {
             <div
               className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
                 item.active
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm ring-2 ring-amber-400/40'
                   : 'bg-slate-900 border border-slate-800 text-slate-600'
               }`}
             >
