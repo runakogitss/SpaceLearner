@@ -25,7 +25,7 @@ export const Sidebar: React.FC = () => {
   const expPercent = Math.min(100, Math.max(0, (stats.userExp / expToNext) * 100));
 
   return (
-    <aside className="w-64 bg-cosmic-card/90 backdrop-blur-xl border-r border-cosmic-border flex flex-col justify-between p-5 min-h-screen">
+    <aside className="w-64 bg-cosmic-card/90 backdrop-blur-xl border-r border-cosmic-border flex flex-col justify-between p-5 h-screen sticky top-0 shrink-0 overflow-y-auto">
       {/* Brand Header */}
       <div>
         <div className="flex items-center gap-3 px-2 py-4 mb-6">

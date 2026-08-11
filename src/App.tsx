@@ -46,7 +46,7 @@ export const App: React.FC = () => {
   }, [syncFromSupabase]);
 
   return (
-    <div className="flex min-h-screen bg-cosmic-bg text-slate-100 font-sans selection:bg-purple-600 selection:text-white">
+    <div className="flex items-start min-h-screen bg-cosmic-bg text-slate-100 font-sans selection:bg-purple-600 selection:text-white">
       {/* Sidebar Navigation */}
       <Sidebar />
 
