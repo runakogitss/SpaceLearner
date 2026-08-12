@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStudyStore } from '../../store/useStudyStore';
 
 export const CalendarWidget: React.FC = () => {
-  const { recentSessions } = useStudyStore();
+  const { analyticsSessions } = useStudyStore();
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const year = currentDate.getFullYear();
@@ -58,12 +58,12 @@ export const CalendarWidget: React.FC = () => {
     
     // Check if user completed a session on this date
     const cellDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const hasSession = recentSessions.some(s => {
+    const hasSession = analyticsSessions.some(s => {
       if (!s.is_completed) return false;
       if (s.completed_at && s.completed_at.includes('T')) {
         return s.completed_at.split('T')[0] === cellDateStr;
       }
-      return isToday && recentSessions.length > 0;
+      return isToday && analyticsSessions.length > 0;
     });
 
     calendarCells.push({

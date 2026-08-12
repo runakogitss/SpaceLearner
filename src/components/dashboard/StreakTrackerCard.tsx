@@ -3,7 +3,7 @@ import { Flame, Check } from 'lucide-react';
 import { useStudyStore } from '../../store/useStudyStore';
 
 export const StreakTrackerCard: React.FC = () => {
-  const { stats, recentSessions } = useStudyStore();
+  const { stats, analyticsSessions } = useStudyStore();
 
   // Get current Monday-Sunday dates of the week
   const today = new Date();
@@ -19,7 +19,7 @@ export const StreakTrackerCard: React.FC = () => {
     const dateStr = d.toISOString().split('T')[0];
 
     // Check if user completed a session on this date
-    const hasSession = recentSessions.some(s => {
+    const hasSession = analyticsSessions.some(s => {
       if (!s.is_completed) return false;
       if (s.completed_at && s.completed_at.includes('T')) {
         return s.completed_at.split('T')[0] === dateStr;

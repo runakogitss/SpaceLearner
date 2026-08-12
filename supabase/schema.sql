@@ -389,6 +389,26 @@ CREATE TRIGGER trg_auth_user_created
 -- 9. ANALYTICS VIEW  (materialises common dashboard queries in one go)
 -- ====================================================================
 CREATE OR REPLACE VIEW public.user_study_dashboard AS
+WITH note_metrics AS (
+  SELECT
+    user_id,
+    COUNT(*) AS total_notes,
+    COUNT(*) FILTER (WHERE is_completed = TRUE) AS completed_notes,
+    COUNT(*) FILTER (WHERE is_completed = FALSE) AS pending_notes
+  FROM public.planner_notes
+  GROUP BY user_id
+),
+session_metrics AS (
+  SELECT
+    user_id,
+    COUNT(*) AS total_sessions,
+    COALESCE(SUM(duration_minutes), 0) AS total_focus_minutes,
+    COALESCE(SUM(duration_minutes)
+      FILTER (WHERE completed_at::DATE = CURRENT_DATE), 0) AS today_focus_minutes
+  FROM public.pomodoro_sessions
+  WHERE is_completed = TRUE
+  GROUP BY user_id
+)
 SELECT
   p.id                                                          AS user_id,
   p.full_name,
@@ -400,20 +420,18 @@ SELECT
   p.daily_goal_minutes,
 
   -- Planner stats
-  COUNT(DISTINCT pn.id)                                          AS total_notes,
-  COUNT(DISTINCT pn.id) FILTER (WHERE pn.is_completed = TRUE)   AS completed_notes,
-  COUNT(DISTINCT pn.id) FILTER (WHERE pn.is_completed = FALSE)  AS pending_notes,
+  COALESCE(nm.total_notes, 0)                                    AS total_notes,
+  COALESCE(nm.completed_notes, 0)                                AS completed_notes,
+  COALESCE(nm.pending_notes, 0)                                  AS pending_notes,
 
   -- Session stats
-  COUNT(DISTINCT ps.id)                                          AS total_sessions,
-  COALESCE(SUM(ps.duration_minutes), 0)                          AS total_focus_minutes,
-  COALESCE(SUM(ps.duration_minutes)
-    FILTER (WHERE ps.completed_at::DATE = CURRENT_DATE), 0)      AS today_focus_minutes
+  COALESCE(sm.total_sessions, 0)                                 AS total_sessions,
+  COALESCE(sm.total_focus_minutes, 0)                            AS total_focus_minutes,
+  COALESCE(sm.today_focus_minutes, 0)                            AS today_focus_minutes
 
-FROM       public.profiles p
-LEFT JOIN  public.planner_notes     pn ON pn.user_id = p.id
-LEFT JOIN  public.pomodoro_sessions ps ON ps.user_id = p.id AND ps.is_completed = TRUE
-GROUP BY   p.id, p.full_name, p.level, p.exp, p.daily_goal_minutes;
+FROM public.profiles p
+LEFT JOIN note_metrics nm ON nm.user_id = p.id
+LEFT JOIN session_metrics sm ON sm.user_id = p.id;
 
 
 -- ====================================================================

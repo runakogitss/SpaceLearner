@@ -5,11 +5,20 @@ import { useStudyStore } from '../../store/useStudyStore';
 const COLOR_PALETTE = ['#8B5CF6', '#06B6D4', '#EC4899', '#10B981', '#F59E0B'];
 
 export const FocusOverview: React.FC = () => {
-  const { stats, recentSessions } = useStudyStore();
+  const { stats, analyticsSessions } = useStudyStore();
+
+  // “This Week” means Monday 00:00 in the browser's local timezone through now.
+  const weekStart = new Date();
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+  const weekSessions = analyticsSessions.filter((session) => {
+    const completedAt = new Date(session.completed_at);
+    return session.is_completed && !Number.isNaN(completedAt.getTime()) && completedAt >= weekStart;
+  });
 
   // Session records are the single source of truth for all analytics.
   const subjectTotals: Record<string, number> = {};
-  recentSessions.filter((session) => session.is_completed).forEach((session) => {
+  weekSessions.forEach((session) => {
     subjectTotals[session.subject_name] = (subjectTotals[session.subject_name] || 0) + session.duration_minutes;
   });
 
@@ -25,7 +34,7 @@ export const FocusOverview: React.FC = () => {
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const timeLabels = ['12 AM', '6 AM', '12 PM', '6 PM'];
   const heatmapMinutes = Array.from({ length: 4 }, () => Array(7).fill(0));
-  recentSessions.filter((session) => session.is_completed).forEach((session) => {
+  weekSessions.forEach((session) => {
     const date = new Date(session.completed_at);
     if (Number.isNaN(date.getTime())) return;
     const day = (date.getDay() + 6) % 7;
@@ -34,8 +43,8 @@ export const FocusOverview: React.FC = () => {
   const maxHeatmapMinutes = Math.max(...heatmapMinutes.flat(), 0);
   const heatmapMatrix = heatmapMinutes.map((row) => row.map((minutes) => maxHeatmapMinutes ? Math.min(4, Math.ceil((minutes / maxHeatmapMinutes) * 4)) : 0));
   const weeklyData = Array.from({ length: 7 }, (_, index) => {
-    const day = new Date(); day.setHours(0, 0, 0, 0); day.setDate(day.getDate() - (6 - index));
-    const minutes = recentSessions.filter((session) => session.is_completed && new Date(session.completed_at).toDateString() === day.toDateString()).reduce((sum, session) => sum + session.duration_minutes, 0);
+    const day = new Date(weekStart); day.setDate(weekStart.getDate() + index);
+    const minutes = weekSessions.filter((session) => new Date(session.completed_at).toDateString() === day.toDateString()).reduce((sum, session) => sum + session.duration_minutes, 0);
     return { day: day.toLocaleDateString(undefined, { weekday: 'short' }), minutes };
   });
 
@@ -154,7 +163,7 @@ export const FocusOverview: React.FC = () => {
                 {stats.focusScore}%
               </span>
               <span className="text-[10px] font-semibold text-emerald-400">
-                Great Focus!
+                {analyticsSessions.length === 0 ? 'No sessions yet' : stats.focusScore >= 80 ? 'Great Focus!' : 'Keep Going!'}
               </span>
             </div>
           </div>
@@ -224,7 +233,7 @@ export const FocusOverview: React.FC = () => {
       </div>
       <div className="mt-6 rounded-2xl border border-white/5 bg-slate-900/40 p-4">
         <span className="text-xs font-semibold uppercase text-slate-300">WEEKLY FOCUS MINUTES</span>
-        <div className="mt-3 h-44">{recentSessions.length === 0 ? <p className="flex h-full items-center justify-center text-xs text-cosmic-textMuted">Your last seven days of focus will appear here.</p> : <ResponsiveContainer width="100%" height="100%"><BarChart data={weeklyData}><XAxis dataKey="day" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={false} tickLine={false}/><YAxis tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={false} tickLine={false}/><Tooltip contentStyle={{ backgroundColor: '#121829', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}/><Bar dataKey="minutes" fill="#8B5CF6" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer>}</div>
+        <div className="mt-3 h-44">{weekSessions.length === 0 ? <p className="flex h-full items-center justify-center text-xs text-cosmic-textMuted">This week's focus sessions will appear here.</p> : <ResponsiveContainer width="100%" height="100%"><BarChart data={weeklyData}><XAxis dataKey="day" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={false} tickLine={false}/><YAxis tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={false} tickLine={false}/><Tooltip contentStyle={{ backgroundColor: '#121829', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}/><Bar dataKey="minutes" fill="#8B5CF6" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer>}</div>
       </div>
     </div>
   );

@@ -101,6 +101,7 @@ function saveSandboxState(state: Partial<StudyState>) {
       currentPlannerNote: state.currentPlannerNote,
       allPlannerNotes: state.allPlannerNotes,
       recentSessions: state.recentSessions,
+      analyticsSessions: state.analyticsSessions,
       userCustomTemplates: state.userCustomTemplates,
       stats: state.stats
     };
@@ -150,6 +151,7 @@ interface StudyState {
   
   // History & Stats
   recentSessions: PomodoroSession[];
+  analyticsSessions: PomodoroSession[];
   stats: FocusStats;
   
   // Actions & Reactive Sync
@@ -264,6 +266,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   allPlannerNotes: savedSandbox?.allPlannerNotes || [guestStarterNote()],
   
   recentSessions: savedSandbox?.recentSessions || [],
+  analyticsSessions: savedSandbox?.analyticsSessions || savedSandbox?.recentSessions || [],
   hasMoreSessions: false,
   
   stats: savedSandbox?.stats || {
@@ -505,6 +508,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
           isTimerRunning: false,
           completedCycles: completedCycles + 1,
           recentSessions: updatedRecentSessions.slice(0, 10),
+          analyticsSessions: [newSession, ...state.analyticsSessions],
           currentPlannerNote: updatedNote,
           allPlannerNotes: state.allPlannerNotes.map(n => n.id === updatedNote.id ? updatedNote : n),
           showReflectionModal: true,
@@ -782,6 +786,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       currentPlannerNote: guestStarterNote(),
       allPlannerNotes: [guestStarterNote()],
       recentSessions: [],
+      analyticsSessions: [],
       hasMoreSessions: false,
       userCustomTemplates: [],
       selectedTemplate: DEFAULT_TEMPLATES[0],
@@ -821,10 +826,11 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         profile = await ensureSupabaseProfile({ id: userId, username: usernameFromAuth, full_name: fullNameFromAuth, daily_goal_minutes: 120, exp: 0, level: 1 });
       }
 
-      const [notes, templates, sessions, dashboardView] = await Promise.all([
+      const [notes, templates, sessions, analyticsSessions, dashboardView] = await Promise.all([
         fetchSupabasePlannerNotes(userId),
         fetchSupabaseStudyTemplates(userId),
         fetchSupabasePomodoroSessions(userId, 10),
+        fetchSupabasePomodoroSessions(userId, 1000),
         fetchSupabaseDashboardView(userId)
       ]);
 
@@ -860,12 +866,17 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         const updatedNotes = notes.length > 0 ? notes : [starterNote];
         const updatedTemplates = templates;
         const updatedSessions = sessions;
+        const completedAnalyticsSessions = analyticsSessions.filter((session) => session.is_completed);
+        const abandonedSessionsCount = analyticsSessions.length - completedAnalyticsSessions.length;
+        const focusScore = analyticsSessions.length === 0
+          ? 0
+          : Math.round((completedAnalyticsSessions.length / analyticsSessions.length) * 100);
 
         const updatedStats: FocusStats = {
           totalFocusTimeMinutes: dashboardView?.total_focus_minutes || 0,
           completedSessionsCount: dashboardView?.total_sessions || 0,
-          abandonedSessionsCount: 0,
-          focusScore: 100,
+          abandonedSessionsCount,
+          focusScore,
           streakDays: dashboardView?.streak_days || 0,
           userLevel: dashboardView?.level || 1,
           userExp: dashboardView?.exp_in_level || 0,
@@ -882,6 +893,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
           systemTemplates: updatedTemplates.length > 0 ? updatedTemplates.filter(t => t.is_system_default) : state.systemTemplates,
           userCustomTemplates: updatedTemplates.filter(t => !t.is_system_default),
           recentSessions: updatedSessions,
+          analyticsSessions,
           hasMoreSessions: updatedSessions.length === 10,
           stats: updatedStats
         };
