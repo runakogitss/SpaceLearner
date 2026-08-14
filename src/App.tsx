@@ -5,6 +5,7 @@ import { QuickStatsBar } from './components/QuickStatsBar';
 import { PomodoroTimerCard } from './components/timer/PomodoroTimerCard';
 import { PlannerNoteCard } from './components/planner/PlannerNoteCard';
 import { FocusOverview } from './components/stats/FocusOverview';
+import { PlannerNotesRecord } from './components/stats/PlannerNotesRecord';
 import { CalendarWidget } from './components/dashboard/CalendarWidget';
 import { StreakTrackerCard } from './components/dashboard/StreakTrackerCard';
 import { ShortcutsCard } from './components/dashboard/ShortcutsCard';
@@ -112,6 +113,7 @@ export const App: React.FC = () => {
                 FOCUS TRACKERS &amp; ANALYTICS
               </h2>
               <FocusOverview />
+              <PlannerNotesRecord />
               <RecentSessions />
             </div>
           )}
