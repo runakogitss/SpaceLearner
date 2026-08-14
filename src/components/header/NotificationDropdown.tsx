@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, CheckCheck, Trash2, ChevronRight, X, Sparkles, Target, Flame, Trophy, BookOpen } from 'lucide-react';
+import { Bell, CheckCheck, Trash2, ChevronRight, X, Sparkles, Target, Flame, Trophy, BookOpen, ArrowRight } from 'lucide-react';
 import { useNotificationStore } from '../../store/useNotificationStore';
 import { useStudyStore } from '../../store/useStudyStore';
 import { NotificationItem } from '../../types';
@@ -12,13 +12,13 @@ interface NotificationDropdownProps {
 export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOpen, onClose }) => {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotification } = useNotificationStore();
   const { setActiveTab } = useStudyStore();
-  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [filter, setFilter] = useState<'all' | 'achievement' | 'reminder' | 'boost'>('all');
 
   if (!isOpen) return null;
 
   const filteredNotifications = notifications.filter((item) => {
-    if (filter === 'unread') return !item.is_read;
-    return true;
+    if (filter === 'all') return true;
+    return item.category === filter;
   });
 
   const handleNotificationClick = (item: NotificationItem) => {
@@ -48,7 +48,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOp
 
   return (
     <div 
-      className="absolute right-0 top-12 w-80 md:w-96 bg-slate-900/95 border border-purple-500/30 rounded-3xl shadow-2xl shadow-purple-950/60 backdrop-blur-xl z-50 overflow-hidden animate-scale-up"
+      className="absolute right-0 top-12 w-80 md:w-96 bg-slate-900/95 border border-purple-500/30 rounded-3xl shadow-2xl shadow-purple-950/70 backdrop-blur-2xl z-50 overflow-hidden animate-scale-up"
       onClick={(e) => e.stopPropagation()}
     >
       {/* Dropdown Header */}
@@ -61,7 +61,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOp
             )}
           </div>
           <h3 className="text-xs font-bold font-outfit text-white tracking-wide uppercase">
-            Notifications
+            Notification Center
           </h3>
           {unreadCount > 0 && (
             <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-bold border border-purple-500/30">
@@ -91,10 +91,10 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOp
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center gap-2 px-5 py-2.5 border-b border-purple-500/10 bg-slate-950/40 text-xs font-medium">
+      <div className="flex items-center gap-1.5 p-2 border-b border-purple-500/10 bg-slate-950/50 text-[11px] font-semibold overflow-x-auto">
         <button
           onClick={() => setFilter('all')}
-          className={`px-3 py-1 rounded-xl transition-all ${
+          className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap ${
             filter === 'all'
               ? 'bg-purple-600 text-white font-bold'
               : 'text-slate-400 hover:text-slate-200'
@@ -103,14 +103,34 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOp
           All ({notifications.length})
         </button>
         <button
-          onClick={() => setFilter('unread')}
-          className={`px-3 py-1 rounded-xl transition-all ${
-            filter === 'unread'
+          onClick={() => setFilter('achievement')}
+          className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap ${
+            filter === 'achievement'
               ? 'bg-purple-600 text-white font-bold'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          Unread ({unreadCount})
+          Achievements 🏆
+        </button>
+        <button
+          onClick={() => setFilter('reminder')}
+          className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap ${
+            filter === 'reminder'
+              ? 'bg-purple-600 text-white font-bold'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Reminders ⏰
+        </button>
+        <button
+          onClick={() => setFilter('boost')}
+          className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap ${
+            filter === 'boost'
+              ? 'bg-purple-600 text-white font-bold'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Boosts 💡
         </button>
       </div>
 
@@ -119,7 +139,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOp
         {filteredNotifications.length === 0 ? (
           <div className="py-8 text-center text-slate-400 text-xs">
             <Bell className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-50" />
-            <p>No notifications right now</p>
+            <p>No notifications in this category</p>
           </div>
         ) : (
           filteredNotifications.map((item) => (
@@ -143,9 +163,23 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isOp
                     {item.timestamp}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                <p className="text-xs text-slate-400 leading-relaxed mb-2">
                   {item.message}
                 </p>
+
+                {/* Inline Quick Action Button */}
+                {item.action_label && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleNotificationClick(item);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-900/50 hover:bg-purple-800/70 border border-purple-500/30 text-purple-200 hover:text-white text-[10px] font-bold transition-all"
+                  >
+                    <span>{item.action_label}</span>
+                    <ArrowRight className="w-3 h-3 text-purple-300" />
+                  </button>
+                )}
               </div>
 
               <div className="flex flex-col items-end gap-2 shrink-0">

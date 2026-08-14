@@ -81,7 +81,16 @@ export interface NotificationItem {
   title: string;
   message: string;
   type: 'goal' | 'streak' | 'level' | 'quote' | 'reminder' | 'system';
+  category: 'achievement' | 'reminder' | 'boost';
   timestamp: string;
   is_read: boolean;
   action_tab?: 'dashboard' | 'timer' | 'planner' | 'statistics' | 'settings';
+  action_label?: string;
+}
+
+export interface ToastItem {
+  id: string;
+  title: string;
+  message: string;
+  type: 'success' | 'info' | 'warning';
 }

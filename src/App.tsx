@@ -12,6 +12,7 @@ import { MotivationalQuoteCard } from './components/dashboard/MotivationalQuoteC
 import { RecentSessions } from './components/dashboard/RecentSessions';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { DailyMotivationalModal } from './components/modals/DailyMotivationalModal';
+import { ToastContainer } from './components/notifications/ToastContainer';
 import { useStudyStore } from './store/useStudyStore';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 
@@ -119,6 +120,7 @@ export const App: React.FC = () => {
         </main>
       </div>
       <DailyMotivationalModal />
+      <ToastContainer />
       {levelUp && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-3xl border border-purple-400/40 bg-cosmic-card p-8 text-center shadow-glow-purple"><div className="text-5xl">🚀</div><p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em] text-purple-300">Achievement unlocked</p><h3 className="mt-2 text-2xl font-bold text-white">LEVEL {levelUp}</h3><p className="mt-2 text-sm text-cosmic-textMuted">Your focused work is paying off. Keep your momentum going.</p><button onClick={() => setLevelUp(null)} className="mt-6 w-full rounded-xl bg-purple-600 py-2.5 text-xs font-bold text-white">KEEP EXPLORING</button></div></div>}
     </div>
   );
