@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, CheckCircle, Database, Image, LogIn, LogOut, Save, ShieldCheck, Upload, User, UserPlus } from 'lucide-react';
+import { AlertCircle, CheckCircle, Database, Image, LogIn, LogOut, Save, ShieldCheck, Trash2, Upload, User, UserPlus } from 'lucide-react';
 import { useStudyStore } from '../../store/useStudyStore';
 import { isSupabaseConfigured, supabase, uploadSupabaseAvatar } from '../../lib/supabase';
 
 export const SettingsModal: React.FC = () => {
   const { userProfile, updateProfile, resetSandboxData, syncFromSupabase } = useStudyStore();
-  const [username, setUsername] = useState('Traveller');
-  const [fullName, setFullName] = useState('Traveller');
+  const [username, setUsername] = useState('reynard');
+  const [fullName, setFullName] = useState('Reynard Runako');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState('');
   const [dailyGoal, setDailyGoal] = useState('120');
@@ -18,8 +18,8 @@ export const SettingsModal: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setUsername(userProfile.username || 'Traveller');
-    setFullName(userProfile.full_name || 'Traveller');
+    setUsername(userProfile.username || 'reynard');
+    setFullName(userProfile.full_name || 'Reynard Runako');
     setAvatarPreview(userProfile.avatar_url || '');
     setDailyGoal(String(userProfile.daily_goal_minutes || 120));
   }, [userProfile]);
@@ -41,6 +41,11 @@ export const SettingsModal: React.FC = () => {
     setAvatarFile(file); setAvatarPreview(URL.createObjectURL(file));
   };
 
+  const removeAvatar = () => {
+    setAvatarFile(null);
+    setAvatarPreview('');
+  };
+
   const encodeAvatar = (file: File): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Unable to read the selected photo.'));
@@ -50,17 +55,15 @@ export const SettingsModal: React.FC = () => {
 
   const saveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
-    let avatarUrl = userProfile.avatar_url || '';
+    let avatarUrl = avatarPreview ? userProfile.avatar_url || '' : '';
     if (avatarFile) {
       if (!authUser) { setMessage({ type: 'error', text: 'Sign in before uploading a profile photo so it can be saved securely.' }); return; }
       const uploadedUrl = await uploadSupabaseAvatar(authUser.id, avatarFile);
-      // Storage may not be enabled on an existing Supabase project. In that
-      // case the existing TEXT profile field safely stores the local image.
       avatarUrl = uploadedUrl || await encodeAvatar(avatarFile);
     }
-    await updateProfile({ username: username.trim() || 'Traveller', full_name: fullName.trim() || 'Traveller', avatar_url: avatarUrl, daily_goal_minutes: Math.max(1, Number(dailyGoal) || 120) });
+    await updateProfile({ username: username.trim() || 'reynard', full_name: fullName.trim() || 'Reynard Runako', avatar_url: avatarUrl, daily_goal_minutes: Math.max(1, Number(dailyGoal) || 120) });
     setAvatarFile(null);
-    setMessage({ type: 'success', text: authUser ? 'Profile and photo saved to your Space Learner account.' : 'Profile saved for this guest session.' });
+    setMessage({ type: 'success', text: authUser ? 'Profile saved to your Space Learner account.' : 'Profile saved for this session.' });
   };
 
   const submitAuth = async (event: React.FormEvent) => {
@@ -75,7 +78,7 @@ export const SettingsModal: React.FC = () => {
     setLoading(false);
   };
 
-  const signOut = async () => { if (supabase) await supabase.auth.signOut(); setAuthUser(null); resetSandboxData(); setMessage({ type: 'success', text: 'Signed out. Welcome, Traveller.' }); };
+  const signOut = async () => { if (supabase) await supabase.auth.signOut(); setAuthUser(null); resetSandboxData(); setMessage({ type: 'success', text: 'Signed out. Welcome, Reynard.' }); };
 
   return <div className="max-w-5xl mx-auto space-y-6">
     <div className="relative overflow-hidden rounded-3xl border border-purple-500/20 bg-gradient-to-r from-indigo-950/70 via-cosmic-card to-purple-950/50 p-7 shadow-glow-card">
@@ -89,10 +92,35 @@ export const SettingsModal: React.FC = () => {
       <form onSubmit={saveProfile} className="lg:col-span-3 rounded-3xl border border-cosmic-border bg-cosmic-card/90 p-6 shadow-glow-card space-y-5">
         <div className="flex items-center gap-3"><div className="rounded-2xl border border-purple-400/30 bg-purple-950/70 p-3 text-purple-300"><User className="h-5 w-5" /></div><div><h3 className="text-sm font-bold tracking-wide text-white">PROFILE DETAILS</h3><p className="text-xs text-cosmic-textMuted">Visible in your personal study dashboard.</p></div></div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Display name" value={username} onChange={setUsername} placeholder="Traveller" />
-          <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Traveller" />
+          <Field label="Display name" value={username} onChange={setUsername} placeholder="reynard" />
+          <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Reynard Runako" />
         </div>
-        <div><label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-cosmic-textMuted">Profile photo</label><div className="flex items-center gap-4 rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 p-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-purple-400/30 bg-purple-950 text-purple-200">{avatarPreview ? <img src={avatarPreview} alt="Profile preview" className="h-full w-full object-cover" /> : <Image className="h-5 w-5" />}</div><label className="flex cursor-pointer items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-950/40 px-3 py-2 text-xs font-bold text-purple-200 hover:bg-purple-900/50"><Upload className="h-4 w-4" /> CHOOSE JPG PHOTO<input type="file" accept=".jpg,.jpeg,image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => selectAvatar(e.target.files?.[0] || null)} /></label><span className="text-[10px] text-cosmic-textMuted">JPG, PNG, WEBP, or GIF · 5 MB max</span></div></div>
+        <div>
+          <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-cosmic-textMuted">Profile photo</label>
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 p-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-purple-400/30 bg-purple-950 text-purple-200">
+              {avatarPreview ? <img src={avatarPreview} alt="Profile preview" className="h-full w-full object-cover" /> : <Image className="h-5 w-5" />}
+            </div>
+            
+            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-950/40 px-3 py-2 text-xs font-bold text-purple-200 hover:bg-purple-900/50 transition-all">
+              <Upload className="h-4 w-4" /> CHOOSE JPG PHOTO
+              <input type="file" accept=".jpg,.jpeg,image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => selectAvatar(e.target.files?.[0] || null)} />
+            </label>
+
+            {avatarPreview && (
+              <button
+                type="button"
+                onClick={removeAvatar}
+                className="flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-950/40 px-3 py-2 text-xs font-bold text-rose-300 hover:bg-rose-900/60 hover:border-rose-400/50 transition-all cursor-pointer"
+                title="Remove profile photo"
+              >
+                <Trash2 className="h-4 w-4 text-rose-400" /> REMOVE PHOTO
+              </button>
+            )}
+
+            <span className="text-[10px] text-cosmic-textMuted w-full sm:w-auto">JPG, PNG, WEBP, or GIF · 5 MB max</span>
+          </div>
+        </div>
         <div><div className="mb-2 flex justify-between"><label className="text-[10px] font-bold uppercase tracking-wider text-cosmic-textMuted">Daily focus goal</label><span className="text-xs font-bold text-purple-300">{dailyGoal} min</span></div><input type="range" min="15" max="360" step="15" value={dailyGoal} onChange={(e) => setDailyGoal(e.target.value)} className="w-full accent-purple-500" /><div className="mt-2 flex justify-between text-[10px] text-cosmic-textMuted"><span>15 min</span><span>6 hrs</span></div></div>
         <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 py-3 text-xs font-bold tracking-wide text-white transition hover:brightness-110"><Save className="h-4 w-4" /> SAVE PROFILE</button>
       </form>
