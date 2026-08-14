@@ -75,3 +75,13 @@ export interface HeatmapCell {
   dayIndex: number; // 0..6 (Mon..Sun)
   intensity: number; // 0..4 level
 }
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type: 'goal' | 'streak' | 'level' | 'quote' | 'reminder' | 'system';
+  timestamp: string;
+  is_read: boolean;
+  action_tab?: 'dashboard' | 'timer' | 'planner' | 'statistics' | 'settings';
+}

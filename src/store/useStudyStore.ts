@@ -232,7 +232,7 @@ const DEFAULT_STARTER_NOTE: PlannerNote = {
 };
 
 const guestStarterNote = (): PlannerNote => ({ ...DEFAULT_STARTER_NOTE, id: 'starter-note-guest', user_id: 'guest-traveller', created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-const guestProfile = (): Profile => ({ id: 'guest-traveller', username: 'Traveller', full_name: 'Traveller', avatar_url: '', daily_goal_minutes: 120, exp: 0, level: 1 });
+const guestProfile = (): Profile => ({ id: 'guest-traveller', username: 'reynard', full_name: 'Reynard Runako', avatar_url: '', daily_goal_minutes: 120, exp: 0, level: 1 });
 
 const savedSandbox = loadSandboxState();
 
@@ -240,8 +240,8 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   isSandboxMode: !isSupabaseConfigured,
   userProfile: savedSandbox?.userProfile || {
     id: 'user-trial-1',
-    username: 'Traveller',
-    full_name: 'Traveller',
+    username: 'reynard',
+    full_name: 'Reynard Runako',
     avatar_url: '',
     daily_goal_minutes: 120,
     exp: 0,

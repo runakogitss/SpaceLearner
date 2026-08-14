@@ -1,12 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Bell, LogIn } from 'lucide-react';
 import { useStudyStore } from '../store/useStudyStore';
+import { useNotificationStore } from '../store/useNotificationStore';
 import { AuthModal } from './auth/AuthModal';
+import { NotificationDropdown } from './header/NotificationDropdown';
+import { BusinessCardPopover } from './header/BusinessCardPopover';
 
 export const Header: React.FC = () => {
-  const { userProfile, isSandboxMode, setActiveTab } = useStudyStore();
+  const { userProfile, isSandboxMode } = useStudyStore();
+  const { unreadCount } = useNotificationStore();
+
   const [greeting, setGreeting] = useState<string>('GOOD EVENING');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  const notifRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const updateTimeGreeting = () => {
@@ -25,9 +35,24 @@ export const Header: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const displayName = isSandboxMode 
-    ? 'TRAVELLER' 
-    : (userProfile.username || userProfile.full_name || 'TRAVELLER').toUpperCase();
+  // Close popovers on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setIsNotifOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const fullName = userProfile.full_name || 'Reynard Runako';
+  const usernameHandle = `@${(userProfile.username || 'reynard').toLowerCase()}`;
+  const greetingName = (userProfile.full_name?.split(' ')[0] || userProfile.username || 'REYNARD').toUpperCase();
 
   return (
     <>
@@ -35,7 +60,7 @@ export const Header: React.FC = () => {
         {/* Greeting Title */}
         <div>
           <h2 className="text-2xl font-bold font-outfit text-white tracking-wide flex items-center gap-2">
-            {greeting}, {displayName}! 👋
+            {greeting}, {greetingName}! 👋
           </h2>
           <p className="text-xs text-cosmic-textMuted mt-0.5">
             You&apos;ve got goals. Let&apos;s make today count.
@@ -63,30 +88,75 @@ export const Header: React.FC = () => {
             <span>{isSandboxMode ? 'LOG IN / SIGN UP' : 'ACCOUNT'}</span>
           </button>
 
+          {/* Notification Bell Dropdown Container */}
+          <div className="relative" ref={notifRef}>
+            <button 
+              onClick={() => {
+                setIsNotifOpen(!isNotifOpen);
+                setIsProfileOpen(false);
+              }}
+              className={`relative p-2.5 rounded-full border transition-all cursor-pointer ${
+                isNotifOpen 
+                  ? 'bg-purple-900/50 border-purple-400 text-white' 
+                  : 'bg-cosmic-card border-cosmic-border text-slate-300 hover:text-white hover:border-purple-500/40'
+              }`}
+              title="Notifications"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-[9px] font-bold text-white flex items-center justify-center border border-slate-900 animate-pulse">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
 
-          {/* Notification Bell */}
-          <button className="relative p-2.5 rounded-full bg-cosmic-card border border-cosmic-border text-slate-300 hover:text-white hover:border-purple-500/40 transition-all">
-            <Bell className="w-4 h-4" />
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-          </button>
+            <NotificationDropdown 
+              isOpen={isNotifOpen} 
+              onClose={() => setIsNotifOpen(false)} 
+            />
+          </div>
 
-          {/* Profile Pill Button */}
-          <button 
-            onClick={() => setActiveTab('settings')}
-            className="flex items-center gap-3 px-3 py-1.5 rounded-full bg-cosmic-card border border-cosmic-border hover:border-purple-500/40 transition-all cursor-pointer group"
-          >
-            <div className="w-8 h-8 overflow-hidden rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 border border-purple-300/40 flex items-center justify-center text-sm shadow-glow-purple">
-              {userProfile.avatar_url ? <img src={userProfile.avatar_url} alt="Profile" className="h-full w-full object-cover" /> : '🧑‍🚀'}
-            </div>
-            <div className="text-left pr-1 hidden sm:block">
-              <div className="text-xs font-semibold text-white group-hover:text-purple-300 transition-colors">
-                {displayName}
+          {/* Header Profile Card Button (FULL NAME FIRST) */}
+          <div className="relative" ref={profileRef}>
+            <button 
+              onClick={() => {
+                setIsProfileOpen(!isProfileOpen);
+                setIsNotifOpen(false);
+              }}
+              className={`flex items-center gap-3 px-3 py-1.5 rounded-full border transition-all cursor-pointer group shadow-glow-card ${
+                isProfileOpen 
+                  ? 'bg-purple-950/80 border-purple-400 ring-2 ring-purple-500/30' 
+                  : 'bg-cosmic-card border-cosmic-border hover:border-purple-500/50'
+              }`}
+              title="View Executive Business Card"
+            >
+              <div className="w-8 h-8 overflow-hidden rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 border border-purple-300/40 flex items-center justify-center text-sm shadow-glow-purple">
+                {userProfile.avatar_url ? (
+                  <img src={userProfile.avatar_url} alt={fullName} className="h-full w-full object-cover" />
+                ) : (
+                  '🧑‍🚀'
+                )}
               </div>
-              <div className="text-[10px] text-cosmic-textMuted">
-                Focus &amp; Conquer
+              
+              <div className="text-left pr-1 hidden sm:block">
+                {/* FULL NAME FIRST */}
+                <div className="text-xs font-extrabold text-white group-hover:text-purple-300 transition-colors leading-tight">
+                  {fullName}
+                </div>
+                {/* DISPLAY NAME / USERNAME SECOND */}
+                <div className="text-[10px] text-purple-300/80 font-medium">
+                  {usernameHandle}
+                </div>
               </div>
-            </div>
-          </button>
+            </button>
+
+            {/* Executive Business Card Popover */}
+            <BusinessCardPopover 
+              isOpen={isProfileOpen} 
+              onClose={() => setIsProfileOpen(false)}
+              onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            />
+          </div>
         </div>
       </header>
 
