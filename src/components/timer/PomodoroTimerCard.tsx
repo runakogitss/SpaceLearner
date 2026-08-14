@@ -41,8 +41,8 @@ export const PomodoroTimerCard: React.FC = () => {
 
   // Form State for New Custom Preset
   const [customName, setCustomName] = useState('');
-  const [customWork, setCustomWork] = useState(45);
-  const [customBreak, setCustomBreak] = useState(10);
+  const [customWork, setCustomWork] = useState(25);
+  const [customBreak, setCustomBreak] = useState(5);
 
   // Quick Adjustment State
   const [adjWork, setAdjWork] = useState(selectedTemplate.work_duration_minutes);

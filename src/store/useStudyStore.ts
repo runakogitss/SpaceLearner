@@ -186,17 +186,17 @@ interface StudyState {
 const DEFAULT_TEMPLATES: StudyTemplate[] = [
   {
     id: 'tpl-1',
-    name: 'IELTS / TOEFL Simulation',
-    work_duration_minutes: 45,
-    break_duration_minutes: 15,
+    name: 'Standard Pomodoro',
+    work_duration_minutes: 25,
+    break_duration_minutes: 5,
     cycles: 4,
     is_system_default: true
   },
   {
     id: 'tpl-2',
-    name: 'Standard Pomodoro',
-    work_duration_minutes: 25,
-    break_duration_minutes: 5,
+    name: 'IELTS / TOEFL Simulation',
+    work_duration_minutes: 45,
+    break_duration_minutes: 15,
     cycles: 4,
     is_system_default: true
   },
@@ -885,13 +885,21 @@ export const useStudyStore = create<StudyState>((set, get) => ({
           dailyGoalMinutes: dashboardView?.daily_goal_minutes || updatedProfile.daily_goal_minutes
         };
 
+        const newSystemTemplates = updatedTemplates.length > 0 ? updatedTemplates.filter(t => t.is_system_default) : state.systemTemplates;
+        const newUserCustomTemplates = updatedTemplates.filter(t => !t.is_system_default);
+        const allTemplates = [...newUserCustomTemplates, ...newSystemTemplates];
+
+        const matchedSelected = allTemplates.find(t => t.id === state.selectedTemplate.id || t.name === state.selectedTemplate.name) || newSystemTemplates[0] || DEFAULT_TEMPLATES[0];
+
         return {
           isSandboxMode: false,
           userProfile: updatedProfile,
           allPlannerNotes: updatedNotes,
           currentPlannerNote: updatedNotes[0],
-          systemTemplates: updatedTemplates.length > 0 ? updatedTemplates.filter(t => t.is_system_default) : state.systemTemplates,
-          userCustomTemplates: updatedTemplates.filter(t => !t.is_system_default),
+          systemTemplates: newSystemTemplates,
+          userCustomTemplates: newUserCustomTemplates,
+          selectedTemplate: matchedSelected,
+          timeLeftSeconds: state.isTimerRunning ? state.timeLeftSeconds : matchedSelected.work_duration_minutes * 60,
           recentSessions: updatedSessions,
           analyticsSessions,
           hasMoreSessions: updatedSessions.length === 10,
