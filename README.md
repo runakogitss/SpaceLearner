@@ -182,8 +182,7 @@ cp "env keys placeholder.example" .env
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_OPENROUTER_API_KEY=           # Leave blank — used in Phase II
-VITE_ENABLE_SANDBOX_MODE=false     # Set to true for offline demo mode
+VITE_OPENROUTER_API_KEY=your-api-key #used for AI model
 ```
 
 > **Sandbox Mode**: Setting `VITE_ENABLE_SANDBOX_MODE=true` lets you run the app without Supabase. Data is persisted in `localStorage` only.
