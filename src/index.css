@@ -36,4 +36,32 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(139, 92, 246, 0.6);
+  border-radius: 9999px;
 }
+
+/* Cosmic Glowing Search Bar Animations */
+@keyframes cosmic-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.35), 0 0 25px rgba(99, 102, 241, 0.2);
+    border-color: rgba(168, 85, 247, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(139, 92, 246, 0.65), 0 0 45px rgba(168, 85, 247, 0.4);
+    border-color: rgba(217, 70, 239, 0.9);
+  }
+}
+
+.search-bar-idle-glow {
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.35);
+}
+
+.search-bar-hover-glow:hover {
+  box-shadow: 0 0 18px rgba(139, 92, 246, 0.45), 0 0 30px rgba(168, 85, 247, 0.2);
+  border-color: rgba(168, 85, 247, 0.65);
+}
+
+.search-bar-active-glow {
+  animation: cosmic-glow-pulse 2.5s infinite ease-in-out;
+}
+

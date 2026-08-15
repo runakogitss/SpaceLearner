@@ -2,13 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Bell, LogIn } from 'lucide-react';
 import { useStudyStore } from '../store/useStudyStore';
 import { useNotificationStore } from '../store/useNotificationStore';
+import { useSearchStore } from '../store/useSearchStore';
 import { AuthModal } from './auth/AuthModal';
 import { NotificationDropdown } from './header/NotificationDropdown';
 import { BusinessCardPopover } from './header/BusinessCardPopover';
+import { CommandPaletteModal } from './header/CommandPaletteModal';
 
 export const Header: React.FC = () => {
   const { userProfile, isSandboxMode } = useStudyStore();
   const { unreadCount } = useNotificationStore();
+  const { isOpen: isSearchOpen, openSearch, toggleSearch } = useSearchStore();
 
   const [greeting, setGreeting] = useState<string>('GOOD EVENING');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -17,6 +20,19 @@ export const Header: React.FC = () => {
 
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+
+  // Global keyboard shortcut: Ctrl + K or Cmd + K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        toggleSearch();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleSearch]);
 
   useEffect(() => {
     const updateTimeGreeting = () => {
@@ -69,14 +85,31 @@ export const Header: React.FC = () => {
 
         {/* Header Actions */}
         <div className="flex items-center gap-4">
-          {/* Search Bar */}
+          {/* Interactive Glowing Search Bar Trigger */}
           <div className="relative w-64 md:w-80">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search anything..."
-              className="w-full bg-cosmic-card/80 border border-cosmic-border rounded-full pl-10 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-all"
-            />
+            <button
+              onClick={openSearch}
+              className={`w-full flex items-center justify-between bg-cosmic-card/80 border rounded-full pl-10 pr-3 py-2 text-xs text-slate-300 placeholder-slate-500 transition-all cursor-pointer group ${
+                isSearchOpen 
+                  ? 'search-bar-active-glow ring-2 ring-purple-500/40 bg-purple-950/40 border-purple-400' 
+                  : 'search-bar-idle-glow search-bar-hover-glow'
+              }`}
+              title="Open Command Palette (Ctrl + K)"
+            >
+              <Search className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${
+                isSearchOpen ? 'text-purple-300 animate-pulse' : 'text-purple-400/80 group-hover:text-purple-300'
+              }`} />
+              
+              <span className="text-slate-400 group-hover:text-slate-200 transition-colors truncate pr-2">
+                Search anything or type &apos;/&apos;...
+              </span>
+
+              <div className="flex items-center gap-1">
+                <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-semibold text-purple-300 bg-purple-950/70 border border-purple-500/40 rounded-full shadow-sm group-hover:border-purple-400 transition-colors">
+                  Ctrl K
+                </kbd>
+              </div>
+            </button>
           </div>
 
           {/* Log In Button (Prominent) */}
@@ -160,8 +193,12 @@ export const Header: React.FC = () => {
         </div>
       </header>
 
+      {/* Command Palette Modal (Ctrl + K) */}
+      <CommandPaletteModal />
+
       {/* Auth Modal Overlay */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </>
   );
 };
+
