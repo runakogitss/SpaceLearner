@@ -1,6 +1,4 @@
 
-![Space Learner Banner](C:\Users\Reynard Runako\.gemini\antigravity\brain\bedfd3f9-961a-4a00-9e3b-c9f6e85a73e6\space_learner_banner_1786765596397.jpg)
-
 <div align="center">
 
 # 🚀 Space Learner
