@@ -93,8 +93,8 @@ Stay motivated with a built-in XP and leveling system:
 ---
 
 ### ⚙️ Settings
-- 🔐 Authentication via Supabase Auth (Email / Password)
-- 🖼️ Upload a profile picture (avatar stored in Supabase Storage, max 5 MB)
+- 🔐 Authentication via Database Authentication (Email / Password)
+- 🖼️ Upload a profile picture (avatar stored in Database Storage (Supabase), max 5 MB)
 - 🎯 Set a custom **Daily Goal** (in minutes)
 - 👤 Edit your username and display name
 
