@@ -33,7 +33,9 @@ export const PomodoroTimerCard: React.FC = () => {
     timerMode,
     completedCycles,
     targetCycles,
-    setTargetCycles
+    setTargetCycles,
+    setCompleteCelebration,
+    acknowledgeSetCompletion
   } = useStudyStore();
 
   const [showCustomModal, setShowCustomModal] = useState(false);
@@ -52,6 +54,14 @@ export const PomodoroTimerCard: React.FC = () => {
     setAdjWork(selectedTemplate.work_duration_minutes);
     setAdjBreak(selectedTemplate.break_duration_minutes);
   }, [selectedTemplate]);
+
+  // Auto-dismiss the full-set celebration badge after a few seconds
+  useEffect(() => {
+    if (setCompleteCelebration) {
+      const timer = setTimeout(() => acknowledgeSetCompletion(), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [setCompleteCelebration, acknowledgeSetCompletion]);
 
   // Timer Tick Interval
   useEffect(() => {
@@ -283,9 +293,15 @@ export const PomodoroTimerCard: React.FC = () => {
         </div>
 
         {/* Next Break Hint */}
-        <p className="text-[11px] text-cosmic-textMuted mt-3">
-          Next: {selectedTemplate.break_duration_minutes} min Break
-        </p>
+        {setCompleteCelebration ? (
+          <div className="mt-3 rounded-full bg-gradient-to-r from-emerald-600 to-teal-500 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 shadow-glow-purple animate-scale-up flex items-center gap-1.5">
+            <Check className="w-3 h-3" /> Full Set Complete!
+          </div>
+        ) : (
+          <p className="text-[11px] text-cosmic-textMuted mt-3">
+            Next: {selectedTemplate.break_duration_minutes} min Break
+          </p>
+        )}
       </div>
 
       {/* Sub Stats Footer with Customizable Cycles */}
@@ -323,8 +339,8 @@ export const PomodoroTimerCard: React.FC = () => {
             >
               <Minus className="w-3 h-3" />
             </button>
-            <span className="text-xs font-bold text-white">
-              {completedCycles} / {targetCycles}
+            <span className={`text-xs font-bold ${setCompleteCelebration ? 'text-emerald-400' : 'text-white'}`}>
+              {setCompleteCelebration ? 'SET COMPLETE!' : `${completedCycles} / ${targetCycles}`}
             </span>
             <button
               onClick={() => setTargetCycles(targetCycles + 1)}

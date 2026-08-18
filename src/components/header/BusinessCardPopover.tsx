@@ -1,6 +1,6 @@
 import React from 'react';
-import { Shield, Sparkles, Flame, Clock, Trophy, Settings, User, LogOut, ExternalLink, Zap } from 'lucide-react';
-import { useStudyStore } from '../../store/useStudyStore';
+import { Shield, Sparkles, Flame, Clock, Trophy, Settings, User, LogOut, ExternalLink, Zap, Timer } from 'lucide-react';
+import { useStudyStore, calculateLevelFromExp } from '../../store/useStudyStore';
 
 interface BusinessCardPopoverProps {
   isOpen: boolean;
@@ -19,10 +19,16 @@ export const BusinessCardPopover: React.FC<BusinessCardPopoverProps> = ({
 
   const fullName = userProfile.full_name || 'Reynard Runako';
   const username = userProfile.username || 'reynard';
-  const level = stats.userLevel || userProfile.level || 1;
-  const currentExp = stats.userExp || userProfile.exp || 0;
-  const expToNextLevel = stats.expToNextLevel || 200;
+  // userProfile.exp = lifetime total EXP; stats.userExp = progress within the
+  // current level (exp_in_level). Derive level-relative values from a single
+  // source of truth and never mix the two definitions.
+  const levelInfo = calculateLevelFromExp(userProfile.exp || 0);
+  const level = stats.userLevel || levelInfo.level;
+  const currentExp = stats.userExp ?? levelInfo.expInLevel;
+  const expToNextLevel = stats.expToNextLevel || levelInfo.expToNextLevel;
   const expPercentage = Math.min(100, Math.round((currentExp / expToNextLevel) * 100));
+  const totalFocusHours = Math.floor((stats.totalFocusTimeMinutes || 0) / 60);
+  const totalFocusMins = (stats.totalFocusTimeMinutes || 0) % 60;
 
   const handleAction = (tab?: 'settings' | 'statistics') => {
     onClose();
@@ -94,13 +100,21 @@ export const BusinessCardPopover: React.FC<BusinessCardPopoverProps> = ({
       </div>
 
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-3 gap-2.5 mb-5 text-center">
+      <div className="grid grid-cols-2 gap-2.5 mb-5 text-center">
         <div className="p-3 rounded-2xl bg-indigo-950/50 border border-purple-500/20">
           <Clock className="w-4 h-4 text-purple-400 mx-auto mb-1" />
           <span className="block text-xs font-extrabold text-white">
             {stats.todayFocusMinutes || 0}m
           </span>
           <span className="text-[10px] text-slate-400">Today</span>
+        </div>
+
+        <div className="p-3 rounded-2xl bg-indigo-950/50 border border-purple-500/20">
+          <Timer className="w-4 h-4 text-cyan-400 mx-auto mb-1" />
+          <span className="block text-xs font-extrabold text-white">
+            {totalFocusHours}h {totalFocusMins}m
+          </span>
+          <span className="text-[10px] text-slate-400">Total Focus</span>
         </div>
 
         <div className="p-3 rounded-2xl bg-indigo-950/50 border border-purple-500/20">

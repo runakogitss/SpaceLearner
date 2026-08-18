@@ -1,5 +1,5 @@
 import React from 'react';
-import { Headphones, BookOpen, Calculator, MessageSquare, CheckCircle, XCircle, History } from 'lucide-react';
+import { Headphones, BookOpen, Calculator, MessageSquare, CheckCircle, XCircle, History, RefreshCw } from 'lucide-react';
 import { useStudyStore } from '../../store/useStudyStore';
 
 export const RecentSessions: React.FC = () => {
@@ -57,17 +57,23 @@ export const RecentSessions: React.FC = () => {
                   {session.subject_name}
                 </h4>
                 
-                {session.is_completed ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                    <CheckCircle className="w-3 h-3" />
-                    Completed
+                <div className="flex items-center flex-wrap gap-1.5">
+                  {session.is_completed ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                      <CheckCircle className="w-3 h-3" />
+                      Completed
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-400 bg-rose-950/40 border border-rose-500/30 px-2 py-0.5 rounded-full">
+                      <XCircle className="w-3 h-3" />
+                      Abandoned
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-pink-300 bg-pink-950/40 border border-pink-500/30 px-2 py-0.5 rounded-full">
+                    <RefreshCw className="w-3 h-3" />
+                    {session.cycles_completed || 1} cycle{(session.cycles_completed || 1) === 1 ? '' : 's'}
                   </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-400 bg-rose-950/40 border border-rose-500/30 px-2 py-0.5 rounded-full">
-                    <XCircle className="w-3 h-3" />
-                    Abandoned
-                  </span>
-                )}
+                </div>
               </div>
             </div>
           );

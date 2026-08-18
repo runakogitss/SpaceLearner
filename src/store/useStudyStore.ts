@@ -23,6 +23,7 @@ import {
   fetchSupabaseDashboardView,
   ensureSupabaseProfile
 } from '../lib/supabase';
+import { useNotificationStore } from './useNotificationStore';
 
 // ====================================================================
 // GAMIFICATION HELPERS & PERSISTENCE
@@ -103,6 +104,7 @@ function saveSandboxState(state: Partial<StudyState>) {
       recentSessions: state.recentSessions,
       analyticsSessions: state.analyticsSessions,
       userCustomTemplates: state.userCustomTemplates,
+      targetCycles: state.targetCycles,
       stats: state.stats
     };
     localStorage.setItem(SANDBOX_STORAGE_KEY, JSON.stringify(payload));
@@ -140,6 +142,7 @@ interface StudyState {
   timerMode: 'work' | 'break';
   completedCycles: number;
   targetCycles: number;
+  setCompleteCelebration: boolean;
   
   // Reflection Modal State
   showReflectionModal: boolean;
@@ -162,6 +165,7 @@ interface StudyState {
   loadMoreSessions: () => Promise<void>;
   adjustTimerDurations: (workMins: number, breakMins: number) => void;
   setTargetCycles: (cycles: number) => void;
+  acknowledgeSetCompletion: () => void;
   toggleTimer: () => void;
   resetTimer: () => void;
   tickTimer: () => void;
@@ -256,8 +260,9 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   timeLeftSeconds: DEFAULT_TEMPLATES[0].work_duration_minutes * 60,
   isTimerRunning: false,
   timerMode: 'work',
-  completedCycles: 1,
+  completedCycles: 0,
   targetCycles: 4,
+  setCompleteCelebration: false,
   
   showReflectionModal: false,
   pendingReflectionSession: null,
@@ -279,7 +284,8 @@ export const useStudyStore = create<StudyState>((set, get) => ({
     userExp: 0,
     expToNextLevel: 200,
     todayFocusMinutes: 0,
-    dailyGoalMinutes: 120
+    dailyGoalMinutes: 120,
+    totalCompletedCycles: 0
   },
 
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -292,12 +298,17 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       n.topic.toLowerCase().includes(template.name.toLowerCase())
     ) || allPlannerNotes[0] || DEFAULT_STARTER_NOTE;
 
-    set({
-      selectedTemplate: template,
-      currentPlannerNote: matchedNote,
-      timeLeftSeconds: template.work_duration_minutes * 60,
-      isTimerRunning: false,
-      timerMode: 'work'
+    set((state) => {
+      const nextState = {
+        selectedTemplate: template,
+        currentPlannerNote: matchedNote,
+        timeLeftSeconds: template.work_duration_minutes * 60,
+        isTimerRunning: false,
+        timerMode: 'work' as const,
+        setCompleteCelebration: false
+      };
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
     });
   },
 
@@ -388,7 +399,15 @@ export const useStudyStore = create<StudyState>((set, get) => ({
   },
 
   setTargetCycles: (cycles) => {
-    set({ targetCycles: Math.max(1, cycles) });
+    set((state) => {
+      const nextState = { targetCycles: Math.max(1, cycles) };
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
+    });
+  },
+
+  acknowledgeSetCompletion: () => {
+    set({ setCompleteCelebration: false });
   },
 
   toggleTimer: () => {
@@ -400,9 +419,13 @@ export const useStudyStore = create<StudyState>((set, get) => ({
     const durationMins = timerMode === 'work' 
       ? selectedTemplate.work_duration_minutes 
       : selectedTemplate.break_duration_minutes;
-    set({
-      isTimerRunning: false,
-      timeLeftSeconds: durationMins * 60
+    set((state) => {
+      const nextState = {
+        isTimerRunning: false,
+        timeLeftSeconds: durationMins * 60
+      };
+      if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
+      return nextState;
     });
   },
 
@@ -419,7 +442,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
 
   // Synchronizes Session Completion -> Single Source of EXP
   completeCurrentSession: async () => {
-    const { selectedTemplate, timerMode, completedCycles, stats, recentSessions, currentPlannerNote, isSandboxMode, userProfile } = get();
+    const { selectedTemplate, timerMode, completedCycles, targetCycles, stats, recentSessions, currentPlannerNote, isSandboxMode, userProfile } = get();
     
     if (timerMode === 'work') {
       const activeNote = currentPlannerNote || DEFAULT_STARTER_NOTE;
@@ -429,6 +452,10 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       // EXP is calculated strictly by exp_for_session(duration):
       // < 25m -> 50 EXP, 25-44m -> 100 EXP, 45+m -> 150 EXP
       const earnedExp = calculateExpForSession(workDurationMins);
+
+      // Cycle tracking: each completed work block counts as one completed cycle.
+      const newCycleCount = completedCycles + 1;
+      const setComplete = newCycleCount >= targetCycles;
 
       const sessionData = {
         user_id: isSandboxMode ? 'user-trial-1' : userProfile.id,
@@ -444,17 +471,26 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       };
 
       let newSession: PomodoroSession;
+      let shouldResync = false;
 
       if (!isSandboxMode && isSupabaseConfigured) {
-        const inserted = await insertSupabasePomodoroSession(sessionData);
-        if (inserted) {
-          newSession = inserted;
-          await get().syncFromSupabase();
+        const result = await insertSupabasePomodoroSession(sessionData);
+        if (result.session) {
+          newSession = result.session;
+          shouldResync = true;
         } else {
           newSession = {
             ...sessionData,
             id: `sess-${Date.now()}`
           };
+          useNotificationStore.getState().addNotification({
+            title: 'Session not saved to cloud',
+            message: `Supabase rejected the session save: ${result.error || 'unknown error'}. Re-run supabase/schema.sql in the SQL editor, then retry.`,
+            type: 'system',
+            category: 'reminder',
+            action_tab: 'settings',
+            action_label: 'Check Settings'
+          });
         }
       } else {
         newSession = {
@@ -466,6 +502,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       const updatedRecentSessions = [newSession, ...recentSessions];
       const newTotalMins = stats.totalFocusTimeMinutes + workDurationMins;
       const newCompletedCount = stats.completedSessionsCount + 1;
+      const newTotalCycles = (stats.totalCompletedCycles || 0) + 1;
       const newScore = Math.round((newCompletedCount / (newCompletedCount + stats.abandonedSessionsCount)) * 100);
 
       const updatedNote: PlannerNote = {
@@ -498,17 +535,30 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         streakDays: newStreak,
         userLevel: levelInfo.level,
         userExp: levelInfo.expInLevel,
-        expToNextLevel: levelInfo.expToNextLevel
+        expToNextLevel: levelInfo.expToNextLevel,
+        totalCompletedCycles: newTotalCycles
       };
+
+      if (setComplete) {
+        useNotificationStore.getState().addNotification({
+          title: 'FULL POMODORO SET COMPLETE 🚀',
+          message: `You completed all ${targetCycles} focus cycles. Outstanding consistency!`,
+          type: 'streak',
+          category: 'achievement',
+          action_tab: 'statistics',
+          action_label: 'View Stats'
+        });
+      }
 
       set((state) => {
         const nextState = {
           timerMode: 'break' as const,
           timeLeftSeconds: selectedTemplate.break_duration_minutes * 60,
           isTimerRunning: false,
-          completedCycles: completedCycles + 1,
-          recentSessions: updatedRecentSessions.slice(0, 10),
-          analyticsSessions: [newSession, ...state.analyticsSessions],
+          completedCycles: setComplete ? 0 : newCycleCount,
+          setCompleteCelebration: setComplete,
+          recentSessions: [newSession, ...state.recentSessions.filter(s => s.id !== newSession.id)].slice(0, 10),
+          analyticsSessions: [newSession, ...state.analyticsSessions.filter(s => s.id !== newSession.id)],
           currentPlannerNote: updatedNote,
           allPlannerNotes: state.allPlannerNotes.map(n => n.id === updatedNote.id ? updatedNote : n),
           showReflectionModal: true,
@@ -523,6 +573,13 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         if (state.isSandboxMode) saveSandboxState({ ...state, ...nextState });
         return nextState;
       });
+
+      // Pull authoritative DB state (EXP/level computed by the trigger) in the
+      // background so the cloud and UI stay in lockstep without blocking the
+      // timer's transition to break mode.
+      if (shouldResync) {
+        void get().syncFromSupabase();
+      }
     } else {
       set({
         timerMode: 'work',
@@ -794,6 +851,7 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       isTimerRunning: false,
       timerMode: 'work',
       completedCycles: 0,
+      setCompleteCelebration: false,
       stats: {
         totalFocusTimeMinutes: 0,
         completedSessionsCount: 0,
@@ -804,7 +862,8 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         userExp: 0,
         expToNextLevel: 200,
         todayFocusMinutes: 0,
-        dailyGoalMinutes: 120
+        dailyGoalMinutes: 120,
+        totalCompletedCycles: 0
       }
     });
   },
@@ -817,7 +876,12 @@ export const useStudyStore = create<StudyState>((set, get) => ({
       const { data: authUser } = await supabase.auth.getUser();
       const userId = authUser.user?.id;
 
-      if (!userId) return;
+      // Not signed in → behave like sandbox (local persistence) instead of
+      // attempting cloud writes that RLS would silently reject and lose data.
+      if (!userId) {
+        set({ isSandboxMode: true });
+        return;
+      }
 
       let profile = await fetchSupabaseProfile(userId);
       const usernameFromAuth = authUser.user?.user_metadata?.username || authUser.user?.email?.split('@')[0] || 'Traveller';
@@ -834,20 +898,37 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         fetchSupabaseDashboardView(userId)
       ]);
 
+      // EXP reconciliation: the completed-session log is the authoritative
+      // source. The DB trigger normally accumulates EXP onto profiles, but if
+      // the trigger is missing (schema not applied), profiles can lag behind
+      // the log — which makes EXP appear to reset on page refresh. Repair it.
+      const completedAnalyticsSessions = analyticsSessions.filter((session) => session.is_completed);
+      const totalExpFromSessions = completedAnalyticsSessions.reduce(
+        (sum, session) => sum + (session.exp_earned ?? calculateExpForSession(session.duration_minutes)),
+        0
+      );
+      const profileExp = dashboardView?.exp ?? profile?.exp ?? 0;
+      const reconciledExp = Math.max(profileExp, totalExpFromSessions);
+      const levelInfo = calculateLevelFromExp(reconciledExp);
+
+      if (reconciledExp > profileExp) {
+        await updateSupabaseProfile(userId, { exp: reconciledExp, level: levelInfo.level });
+      }
+
       set((state) => {
         const updatedProfile: Profile = profile ? {
           ...profile,
           username: profile.username || usernameFromAuth,
           full_name: profile.full_name || fullNameFromAuth,
-          exp: dashboardView?.exp ?? profile.exp ?? 0,
-          level: dashboardView?.level ?? profile.level ?? 1
+          exp: reconciledExp,
+          level: levelInfo.level
         } : {
           id: userId,
           username: usernameFromAuth,
           full_name: fullNameFromAuth,
           daily_goal_minutes: 120,
-          exp: dashboardView?.exp ?? 0,
-          level: dashboardView?.level ?? 1
+          exp: reconciledExp,
+          level: levelInfo.level
         };
 
         const starterNote: PlannerNote = {
@@ -866,11 +947,11 @@ export const useStudyStore = create<StudyState>((set, get) => ({
         const updatedNotes = notes.length > 0 ? notes : [starterNote];
         const updatedTemplates = templates;
         const updatedSessions = sessions;
-        const completedAnalyticsSessions = analyticsSessions.filter((session) => session.is_completed);
         const abandonedSessionsCount = analyticsSessions.length - completedAnalyticsSessions.length;
         const focusScore = analyticsSessions.length === 0
           ? 0
           : Math.round((completedAnalyticsSessions.length / analyticsSessions.length) * 100);
+        const totalCompletedCycles = completedAnalyticsSessions.reduce((sum, session) => sum + (session.cycles_completed || 1), 0);
 
         const updatedStats: FocusStats = {
           totalFocusTimeMinutes: dashboardView?.total_focus_minutes || 0,
@@ -878,11 +959,12 @@ export const useStudyStore = create<StudyState>((set, get) => ({
           abandonedSessionsCount,
           focusScore,
           streakDays: dashboardView?.streak_days || 0,
-          userLevel: dashboardView?.level || 1,
-          userExp: dashboardView?.exp_in_level || 0,
-          expToNextLevel: dashboardView?.exp_to_next_level || 200,
+          userLevel: levelInfo.level,
+          userExp: levelInfo.expInLevel,
+          expToNextLevel: levelInfo.expToNextLevel,
           todayFocusMinutes: dashboardView?.today_focus_minutes || 0,
-          dailyGoalMinutes: dashboardView?.daily_goal_minutes || updatedProfile.daily_goal_minutes
+          dailyGoalMinutes: dashboardView?.daily_goal_minutes || updatedProfile.daily_goal_minutes,
+          totalCompletedCycles
         };
 
         const newSystemTemplates = updatedTemplates.length > 0 ? updatedTemplates.filter(t => t.is_system_default) : state.systemTemplates;

@@ -316,6 +316,27 @@ CREATE TRIGGER trg_planner_notes_updated_at
 --  • Safety cap in level_from_exp() prevents infinite loop.
 --  • Streak is read from the live function rather than a stored column.
 -- --------------------------------------------------------------------
+-- --------------------------------------------------------------------
+-- Defensive cleanup: remove any stray/non-standard triggers left on the
+-- session table from older builds. Extra triggers can make
+-- INSERT ... RETURNING report more than one row, which broke the app's
+-- `.single()` reads ("Cannot coerce the result to a single JSON object").
+-- --------------------------------------------------------------------
+DO $$
+DECLARE
+  v_tgname TEXT;
+BEGIN
+  FOR v_tgname IN
+    SELECT tgname
+    FROM pg_trigger
+    WHERE tgrelid = 'public.pomodoro_sessions'::regclass
+      AND NOT tgisinternal
+      AND tgname <> 'trg_session_exp'
+  LOOP
+    EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.pomodoro_sessions', v_tgname);
+  END LOOP;
+END $$;
+
 CREATE OR REPLACE FUNCTION public.handle_session_exp()
 RETURNS TRIGGER AS $$
 DECLARE

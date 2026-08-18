@@ -68,6 +68,7 @@ export interface FocusStats {
   expToNextLevel?: number;
   todayFocusMinutes?: number;
   dailyGoalMinutes?: number;
+  totalCompletedCycles?: number;
 }
 
 export interface HeatmapCell {

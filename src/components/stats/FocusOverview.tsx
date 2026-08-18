@@ -1,5 +1,6 @@
 import React from 'react';
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { RefreshCw } from 'lucide-react';
 import { useStudyStore } from '../../store/useStudyStore';
 
 const COLOR_PALETTE = ['#8B5CF6', '#06B6D4', '#EC4899', '#10B981', '#F59E0B'];
@@ -47,6 +48,13 @@ export const FocusOverview: React.FC = () => {
     const minutes = weekSessions.filter((session) => new Date(session.completed_at).toDateString() === day.toDateString()).reduce((sum, session) => sum + session.duration_minutes, 0);
     return { day: day.toLocaleDateString(undefined, { weekday: 'short' }), minutes };
   });
+
+  const weeklyCyclesData = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(weekStart); day.setDate(weekStart.getDate() + index);
+    const cycles = weekSessions.filter((session) => new Date(session.completed_at).toDateString() === day.toDateString()).reduce((sum, session) => sum + (session.cycles_completed || 1), 0);
+    return { day: day.toLocaleDateString(undefined, { weekday: 'short' }), cycles };
+  });
+  const totalCyclesThisWeek = weekSessions.reduce((sum, session) => sum + (session.cycles_completed || 1), 0);
 
   const getHeatmapColor = (level: number) => {
     switch (level) {
@@ -234,6 +242,48 @@ export const FocusOverview: React.FC = () => {
       <div className="mt-6 rounded-2xl border border-white/5 bg-slate-900/40 p-4">
         <span className="text-xs font-semibold uppercase text-slate-300">WEEKLY FOCUS MINUTES</span>
         <div className="mt-3 h-44">{weekSessions.length === 0 ? <p className="flex h-full items-center justify-center text-xs text-cosmic-textMuted">This week's focus sessions will appear here.</p> : <ResponsiveContainer width="100%" height="100%"><BarChart data={weeklyData}><XAxis dataKey="day" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={false} tickLine={false}/><YAxis tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={false} tickLine={false}/><Tooltip contentStyle={{ backgroundColor: '#121829', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}/><Bar dataKey="minutes" fill="#8B5CF6" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer>}</div>
+      </div>
+
+      {/* Cycles Recap Module */}
+      <div className="mt-6 rounded-2xl border border-white/5 bg-slate-900/40 p-4">
+        <span className="text-xs font-semibold uppercase text-slate-300 flex items-center gap-2">
+          <RefreshCw className="w-3.5 h-3.5 text-pink-400" />
+          CYCLES RECAP
+        </span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 items-stretch">
+          <div className="bg-slate-950/50 border border-pink-500/20 rounded-2xl p-4 flex flex-col justify-center">
+            <span className="text-[10px] font-bold text-cosmic-textMuted uppercase tracking-wider block mb-1">
+              Total Completed Cycles
+            </span>
+            <span className="text-3xl font-extrabold font-outfit text-white">
+              {stats.totalCompletedCycles || 0}
+            </span>
+            <span className="text-[11px] text-cosmic-textMuted">
+              Focus blocks completed across all sessions
+            </span>
+          </div>
+
+          <div className="bg-slate-950/50 border border-emerald-500/20 rounded-2xl p-4 flex flex-col justify-center">
+            <span className="text-[10px] font-bold text-cosmic-textMuted uppercase tracking-wider block mb-1">
+              Cycles This Week
+            </span>
+            <span className="text-3xl font-extrabold font-outfit text-white">
+              {totalCyclesThisWeek}
+            </span>
+            <span className="text-[11px] text-cosmic-textMuted">
+              Completed focus blocks since Monday
+            </span>
+          </div>
+
+          <div className="bg-slate-950/50 border border-white/10 rounded-2xl p-4">
+            <span className="text-[10px] font-bold text-cosmic-textMuted uppercase tracking-wider block mb-1">
+              Cycles Per Day
+            </span>
+            <div className="h-16">
+              {weekSessions.length === 0 ? <p className="text-xs text-cosmic-textMuted">No cycles logged this week yet.</p> : <ResponsiveContainer width="100%" height="100%"><BarChart data={weeklyCyclesData}><XAxis dataKey="day" tick={{ fill: '#94A3B8', fontSize: 9 }} axisLine={false} tickLine={false} interval={0} /><Tooltip contentStyle={{ backgroundColor: '#121829', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }} /><Bar dataKey="cycles" fill="#EC4899" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

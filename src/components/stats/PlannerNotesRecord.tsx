@@ -1,12 +1,23 @@
-import React, { useState } from 'react';
-import { BookOpen, CheckCircle, Clock, FileText, ChevronDown, ChevronUp, MessageSquare, Filter, ArrowUpRight, Target } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { BookOpen, CheckCircle, Clock, FileText, ChevronDown, ChevronUp, MessageSquare, Filter, ArrowUpRight, Target, RefreshCw } from 'lucide-react';
 import { useStudyStore } from '../../store/useStudyStore';
 import { PlannerNote } from '../../types';
 
 export const PlannerNotesRecord: React.FC = () => {
-  const { allPlannerNotes, selectPlannerNote, setActiveTab } = useStudyStore();
+  const { allPlannerNotes, selectPlannerNote, setActiveTab, analyticsSessions } = useStudyStore();
   const [filter, setFilter] = useState<'all' | 'completed' | 'active'>('all');
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+
+  // Sum completed cycles per planner note from linked focus sessions.
+  const cyclesByNote = useMemo(() => {
+    const map: Record<string, number> = {};
+    analyticsSessions.forEach((session) => {
+      if (session.note_id) {
+        map[session.note_id] = (map[session.note_id] || 0) + (session.cycles_completed || 1);
+      }
+    });
+    return map;
+  }, [analyticsSessions]);
 
   const totalNotes = allPlannerNotes.length;
   const completedNotes = allPlannerNotes.filter(n => n.is_completed);
@@ -177,6 +188,12 @@ export const PlannerNotesRecord: React.FC = () => {
                         <span className="text-[11px] text-purple-300 font-semibold bg-purple-950/50 border border-purple-500/30 px-2 py-0.5 rounded-md">
                           ⏱️ {note.planned_duration_minutes || 60}m
                         </span>
+                        {cyclesByNote[note.id] > 0 && (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-pink-300 font-semibold bg-pink-950/50 border border-pink-500/30 px-2 py-0.5 rounded-md">
+                            <RefreshCw className="w-2.5 h-2.5" />
+                            {cyclesByNote[note.id]} cycle{cyclesByNote[note.id] === 1 ? '' : 's'}
+                          </span>
+                        )}
                       </div>
 
                       {/* Priority Targets Badges */}
@@ -220,6 +237,17 @@ export const PlannerNotesRecord: React.FC = () => {
                 {/* Expanded Details Body */}
                 {isExpanded && (
                   <div className="mt-4 pt-3 border-t border-purple-500/15 space-y-3 animate-fade-in">
+                    {/* Focus Cycles Completed */}
+                    <div className="flex items-center justify-between bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                      <span className="text-[10px] font-bold text-cosmic-textMuted uppercase tracking-wider flex items-center gap-1.5">
+                        <RefreshCw className="w-3 h-3 text-pink-400" />
+                        Focus Cycles Completed
+                      </span>
+                      <span className="text-xs font-bold text-white font-outfit">
+                        {cyclesByNote[note.id] || 0} cycle{cyclesByNote[note.id] === 1 ? '' : 's'}
+                      </span>
+                    </div>
+
                     {/* Note Content Summary */}
                     <div>
                       <span className="text-[10px] font-bold text-cosmic-textMuted uppercase tracking-wider block mb-1">

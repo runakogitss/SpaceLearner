@@ -45,13 +45,13 @@ export async function fetchSupabaseProfile(userId: string): Promise<Profile | nu
     .from('profiles')
     .select('*')
     .eq('id', userId)
-    .single();
+    .limit(1);
 
   if (error || !data) {
     console.warn('Supabase fetch profile error:', error?.message);
     return null;
   }
-  return data as Profile;
+  return (data?.[0] as Profile) ?? null;
 }
 
 /**
@@ -67,13 +67,13 @@ export async function updateSupabaseProfile(userId: string, fields: Partial<Prof
     })
     .eq('id', userId)
     .select()
-    .single();
+    .limit(1);
 
   if (error) {
     console.error('Supabase update profile error:', error.message);
     return null;
   }
-  return data as Profile;
+  return (data?.[0] as Profile) ?? null;
 }
 
 /** Create a missing profile row for an authenticated account (the auth trigger is the
@@ -84,13 +84,13 @@ export async function ensureSupabaseProfile(profile: Profile): Promise<Profile |
     .from('profiles')
     .upsert(profile, { onConflict: 'id', ignoreDuplicates: true })
     .select()
-    .single();
+    .limit(1);
 
   if (error) {
     console.error('Supabase ensure profile error:', error.message);
     return null;
   }
-  return data as Profile;
+  return (data?.[0] as Profile) ?? null;
 }
 
 /**
@@ -120,13 +120,13 @@ export async function insertSupabasePlannerNote(note: Omit<PlannerNote, 'id' | '
     .from('planner_notes')
     .insert([note])
     .select()
-    .single();
+    .limit(1);
 
   if (error) {
     console.error('Supabase insert planner note error:', error.message);
     return null;
   }
-  return data as PlannerNote;
+  return (data?.[0] as PlannerNote) ?? null;
 }
 
 /**
@@ -142,13 +142,13 @@ export async function updateSupabasePlannerNote(id: string, fields: Partial<Plan
     })
     .eq('id', id)
     .select()
-    .single();
+    .limit(1);
 
   if (error) {
     console.error('Supabase update planner note error:', error.message);
     return null;
   }
-  return data as PlannerNote;
+  return (data?.[0] as PlannerNote) ?? null;
 }
 
 /**
@@ -195,13 +195,13 @@ export async function insertSupabaseStudyTemplate(template: Omit<StudyTemplate, 
     .from('study_templates')
     .insert([template])
     .select()
-    .single();
+    .limit(1);
 
   if (error) {
     console.error('Supabase insert template error:', error.message);
     return null;
   }
-  return data as StudyTemplate;
+  return (data?.[0] as StudyTemplate) ?? null;
 }
 
 export async function deleteSupabaseStudyTemplate(id: string): Promise<boolean> {
@@ -216,20 +216,26 @@ export async function deleteSupabaseStudyTemplate(id: string): Promise<boolean> 
 
 /**
  * Insert a completed pomodoro session (Triggers automatic EXP & Level computation in Postgres!)
+ * Returns the inserted row plus the raw error so the UI can surface diagnostics.
  */
-export async function insertSupabasePomodoroSession(session: Omit<PomodoroSession, 'id' | 'completed_at'>): Promise<PomodoroSession | null> {
-  if (!supabase) return null;
-  const { data, error } = await supabase
+export async function insertSupabasePomodoroSession(session: Omit<PomodoroSession, 'id' | 'completed_at'>): Promise<{ session: PomodoroSession | null; error: string | null }> {
+  if (!supabase) return { session: null, error: 'Supabase is not configured.' };
+  // No `.select()` / RETURNING here: some database setups (stray triggers,
+  // INSTEAD OF rules) make INSERT ... RETURNING report extra rows, which
+  // breaks `.single()` with "Cannot coerce the result to a single JSON
+  // object". The row is still written; the next sync() returns real values.
+  const { error } = await supabase
     .from('pomodoro_sessions')
-    .insert([session])
-    .select()
-    .single();
+    .insert([session]);
 
   if (error) {
     console.error('Supabase insert pomodoro session error:', error.message);
-    return null;
+    return { session: null, error: error.message };
   }
-  return data as PomodoroSession;
+  return {
+    session: { ...session, id: `sess-${Date.now()}`, completed_at: new Date().toISOString() } as PomodoroSession,
+    error: null
+  };
 }
 
 /**
@@ -260,11 +266,11 @@ export async function fetchSupabaseDashboardView(userId: string) {
     .from('user_study_dashboard')
     .select('*')
     .eq('user_id', userId)
-    .single();
+    .limit(1);
 
   if (error || !data) {
     console.warn('Supabase fetch dashboard view error:', error?.message);
     return null;
   }
-  return data;
+  return data?.[0] ?? null;
 }
