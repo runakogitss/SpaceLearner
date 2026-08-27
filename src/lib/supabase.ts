@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { Profile, PlannerNote, StudyTemplate, PomodoroSession } from '../types';
+import { Profile, PlannerNote, StudyTemplate, PomodoroSession, AIEvaluation } from '../types';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -273,4 +273,45 @@ export async function fetchSupabaseDashboardView(userId: string) {
     return null;
   }
   return data?.[0] ?? null;
+}
+
+/**
+ * Log a Kaizen (AI advisor) prompt + response to `ai_evaluations`.
+ * Used for Phase II AI coaching history and future plan reviews.
+ */
+export async function insertSupabaseAIEvaluation(
+  userId: string,
+  promptContext: string,
+  aiResponse: string,
+  evaluationType: 'general_advice' | 'weekly_summary' | 'plan_review' = 'general_advice'
+): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase
+    .from('ai_evaluations')
+    .insert([{ user_id: userId, prompt_context: promptContext, ai_response: aiResponse, evaluation_type: evaluationType }]);
+
+  if (error) {
+    console.error('Supabase insert AI evaluation error:', error.message);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Fetch recent Kaizen advisor exchanges for the user.
+ */
+export async function fetchSupabaseAIEvaluations(userId: string, limit = 20): Promise<AIEvaluation[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('ai_evaluations')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error || !data) {
+    console.warn('Supabase fetch AI evaluations error:', error?.message);
+    return [];
+  }
+  return data as AIEvaluation[];
 }

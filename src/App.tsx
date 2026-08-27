@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { QuickStatsBar } from './components/QuickStatsBar';
@@ -16,6 +16,9 @@ import { DailyMotivationalModal } from './components/modals/DailyMotivationalMod
 import { ToastContainer } from './components/notifications/ToastContainer';
 import { useStudyStore } from './store/useStudyStore';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
+
+// Kaizen (OpenRouter SDK) is heavy — load it only when the AI tab is opened.
+const KaizenAdvisor = lazy(() => import('./components/ai/KaizenAdvisor'));
 
 export const App: React.FC = () => {
   const { activeTab, syncFromSupabase } = useStudyStore();
@@ -116,6 +119,12 @@ export const App: React.FC = () => {
               <PlannerNotesRecord />
               <RecentSessions />
             </div>
+          )}
+
+          {activeTab === 'ai' && (
+            <Suspense fallback={<div className="flex items-center justify-center py-24 text-xs text-cosmic-textMuted animate-pulse">Loading Kaizen…</div>}>
+              <KaizenAdvisor />
+            </Suspense>
           )}
 
           {activeTab === 'settings' && <SettingsModal />}

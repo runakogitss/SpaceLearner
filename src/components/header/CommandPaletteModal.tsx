@@ -13,7 +13,8 @@ import {
   Sparkles,
   Play,
   PlusCircle,
-  Compass
+  Compass,
+  Bot
 } from 'lucide-react';
 import { useSearchStore } from '../../store/useSearchStore';
 import { useStudyStore } from '../../store/useStudyStore';
@@ -87,6 +88,7 @@ export const CommandPaletteModal: React.FC = () => {
     { name: 'Pomodoro Timer Presets', tab: 'timer' as const, icon: <Clock className="w-4 h-4 text-cyan-400" /> },
     { name: 'Study Planner & Reflections', tab: 'planner' as const, icon: <FileText className="w-4 h-4 text-indigo-400" /> },
     { name: 'Focus Tracker & Statistics', tab: 'statistics' as const, icon: <BarChart2 className="w-4 h-4 text-emerald-400" /> },
+    { name: 'Kaizen AI Advisor', tab: 'ai' as const, icon: <Bot className="w-4 h-4 text-fuchsia-400" /> },
     { name: 'Account & Settings', tab: 'settings' as const, icon: <SettingsIcon className="w-4 h-4 text-pink-400" /> }
   ];
 

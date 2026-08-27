@@ -1,11 +1,17 @@
 import React from 'react';
-import { Timer, BookOpen, BarChart3, Settings } from 'lucide-react';
+import { LayoutDashboard, Timer, BookOpen, BarChart3, Settings, Bot } from 'lucide-react';
 import { useStudyStore } from '../../store/useStudyStore';
 
 export const ShortcutsCard: React.FC = () => {
   const { setActiveTab } = useStudyStore();
 
   const shortcuts = [
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: LayoutDashboard,
+      gradient: 'from-indigo-900/60 to-blue-900/60 border-indigo-500/30 text-indigo-300'
+    },
     {
       id: 'timer',
       label: 'Pomodoro Timer',
@@ -23,6 +29,12 @@ export const ShortcutsCard: React.FC = () => {
       label: 'Statistics',
       icon: BarChart3,
       gradient: 'from-emerald-900/60 to-teal-900/60 border-emerald-500/30 text-emerald-300'
+    },
+    {
+      id: 'ai',
+      label: 'AI Advisor (Kaizen)',
+      icon: Bot,
+      gradient: 'from-fuchsia-900/60 to-purple-900/60 border-fuchsia-500/30 text-fuchsia-300'
     },
     {
       id: 'settings',

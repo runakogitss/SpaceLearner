@@ -6,7 +6,8 @@ import {
   BarChart3, 
   Settings, 
   Sparkles,
-  Rocket
+  Rocket,
+  Bot
 } from 'lucide-react';
 import { useStudyStore } from '../store/useStudyStore';
 
@@ -18,6 +19,7 @@ export const Sidebar: React.FC = () => {
     { id: 'timer', label: 'POMODORO TIMER', icon: Timer },
     { id: 'planner', label: "PLANNER'S NOTE", icon: BookOpen },
     { id: 'statistics', label: 'STATISTICS', icon: BarChart3 },
+    { id: 'ai', label: 'AI ADVISOR', icon: Bot },
     { id: 'settings', label: 'SETTINGS', icon: Settings },
   ] as const;
 

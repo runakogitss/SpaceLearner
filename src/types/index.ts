@@ -85,7 +85,7 @@ export interface NotificationItem {
   category: 'achievement' | 'reminder' | 'boost';
   timestamp: string;
   is_read: boolean;
-  action_tab?: 'dashboard' | 'timer' | 'planner' | 'statistics' | 'settings';
+  action_tab?: 'dashboard' | 'timer' | 'planner' | 'statistics' | 'settings' | 'ai';
   action_label?: string;
 }
 

@@ -130,7 +130,7 @@ interface StudyState {
   userProfile: Profile;
   
   // Navigation active tab
-  activeTab: 'dashboard' | 'timer' | 'planner' | 'statistics' | 'settings';
+  activeTab: 'dashboard' | 'timer' | 'planner' | 'statistics' | 'settings' | 'ai';
   
   // Timer State
   selectedTemplate: StudyTemplate;
@@ -158,7 +158,7 @@ interface StudyState {
   stats: FocusStats;
   
   // Actions & Reactive Sync
-  setActiveTab: (tab: 'dashboard' | 'timer' | 'planner' | 'statistics' | 'settings') => void;
+  setActiveTab: (tab: 'dashboard' | 'timer' | 'planner' | 'statistics' | 'settings' | 'ai') => void;
   selectTemplate: (template: StudyTemplate) => void;
   createCustomTemplate: (name: string, workMins: number, breakMins: number) => Promise<void>;
   deleteCustomTemplate: (id: string) => Promise<void>;
