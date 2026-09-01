@@ -38,26 +38,129 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
+// Inline formatting: bold, italic, links, and inline code (code spans are
+// protected with placeholders so ** or * inside them stay literal).
+function applyInline(html: string): string {
+  const codeSpans: string[] = [];
+  let s = html.replace(/`([^`\n]+)`/g, (_m, code: string) => {
+    codeSpans.push(code);
+    return `\u0000${codeSpans.length - 1}\u0000`;
+  });
+
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  s = s.replace(/(^|[\s(\[])_([^_]+)_/g, '$1<em>$2</em>');
+  s = s.replace(
+    /\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-purple-300 underline decoration-purple-500/50 hover:text-white">$1</a>'
+  );
+
+  s = s.replace(/\u0000(\d+)\u0000/g, (_m, idx: string) => {
+    const code = codeSpans[Number(idx)] || '';
+    return `<code class="rounded bg-slate-950/80 border border-white/10 px-1 py-0.5 text-[10px] text-purple-200">${code}</code>`;
+  });
+
+  return s;
+}
+
+function renderTableRow(cells: string[], tag: 'th' | 'td'): string {
+  const cls =
+    tag === 'th'
+      ? 'px-2 py-1.5 border-b-2 border-purple-500/30 text-left font-bold text-purple-200 uppercase tracking-wider text-[10px]'
+      : 'px-2 py-1.5 border-b border-white/10 text-left align-top text-slate-200';
+  return `<tr>${cells.map((c) => `<${tag} class="${cls}">${applyInline(c)}</${tag}>`).join('')}</tr>`;
+}
+
+function renderTable(tableLines: string[]): string {
+  const rows = tableLines
+    .map((line) => line.replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim()))
+    .filter((cells) => cells.length > 0 && !cells.every((c) => /^:?-{2,}:?$/.test(c)));
+
+  if (rows.length === 0) return '';
+  const [header, ...body] = rows;
+  return (
+    '<div class="overflow-x-auto my-2"><table class="w-full text-left border-collapse text-[11px]">' +
+    `<thead>${renderTableRow(header, 'th')}</thead>` +
+    `<tbody>${body.map((r) => renderTableRow(r, 'td')).join('')}</tbody>` +
+    '</table></div>'
+  );
+}
+
+function processLine(line: string): string {
+  let s = line;
+  s = s.replace(/^(#{1,4})\s+(.*)$/, '<span class="block font-bold text-purple-300 uppercase tracking-wider text-[11px] mb-1">$2</span>');
+  s = s.replace(/^\s*[-*]\s+/, '• ');
+  return applyInline(s);
+}
+
 function renderKaizenMarkdown(text: string): string {
-  let html = escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const lines = escaped.split('\n');
+  const blocks: string[] = [];
+  let paragraph: string[] = [];
 
-  // Bold **text** / __text__
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-  // Italic *text* / _text_
-  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  html = html.replace(/(^|[\s(\[])_([^_]+)_/g, '$1<em>$2</em>');
-  // Inline code `code`
-  html = html.replace(/`([^`\n]+)`/g, '<code class="rounded bg-slate-950/80 border border-white/10 px-1 py-0.5 text-[10px] text-purple-200">$1</code>');
-  // Headings # .. / ## ...
-  html = html.replace(/^(#{1,4})\s+(.*)$/gm, '<span class="block font-bold text-purple-300 uppercase tracking-wider text-[11px] mb-1">$2</span>');
-  // Bullet lists: - item / * item  →  • item
-  const lines = html.split('\n').map((line) => line.replace(/^\s*[-*]\s+/, '• '));
-  html = lines.join('\n');
-  // Preserve line breaks
-  html = html.replace(/\n/g, '<br/>');
+  const flushParagraph = () => {
+    if (paragraph.length) {
+      blocks.push(paragraph.join('<br/>'));
+      paragraph = [];
+    }
+  };
 
-  return html;
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block ```lang ... ```
+    const fence = line.match(/^```(\w*)\s*$/);
+    if (fence) {
+      flushParagraph();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // skip closing fence
+      blocks.push(
+        `<pre class="my-2 rounded-xl bg-slate-950/80 border border-purple-500/20 p-3 overflow-x-auto text-[11px] leading-relaxed text-purple-100">${codeLines.join('\n')}</pre>`
+      );
+      continue;
+    }
+
+    // Table block: consecutive rows starting with '|'
+    if (line.trim().startsWith('|')) {
+      flushParagraph();
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
+      const table = renderTable(tableLines);
+      if (table) blocks.push(table);
+      continue;
+    }
+
+    // Blockquote block: consecutive lines starting with '>'
+    if (line.trim().startsWith('&gt;')) {
+      flushParagraph();
+      const quoteLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('&gt;')) {
+        quoteLines.push(lines[i].replace(/^\s*&gt;\s*/, ''));
+        i++;
+      }
+      blocks.push(
+        `<blockquote class="my-2 border-l-2 border-purple-500/50 pl-3 text-slate-300">${quoteLines.map(processLine).join('<br/>')}</blockquote>`
+      );
+      continue;
+    }
+
+    paragraph.push(processLine(line));
+    i++;
+  }
+  flushParagraph();
+
+  return blocks.join('<br/>');
 }
 
 export const KaizenAdvisor: React.FC = () => {
