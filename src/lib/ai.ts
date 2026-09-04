@@ -1,22 +1,42 @@
-import { OpenRouter } from '@openrouter/sdk';
 import { Profile, PlannerNote, PomodoroSession, FocusStats } from '../types';
 
 // ====================================================================
 // KAIZEN — SPACE LEARNER AI STUDY ADVISOR
-// Powered by OpenRouter (`VITE_OPENROUTER_API_KEY` in `.env`)
+// Provider-agnostic OpenAI-compatible client. Providers are registered in
+// `.env` as a named registry (only base URL + model reach the browser —
+// API keys stay server-side in the proxy / serverless function):
+//   VITE_AI_PROVIDER_<ID>_BASE_URL
+//   VITE_AI_PROVIDER_<ID>_MODEL
+//   VITE_AI_PROVIDER_<ID>_KEY   (server-side only; falls back per provider)
 // ====================================================================
 
-export const AI_MODEL = 'nvidia/nemotron-3.5-lightning:free';
-
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
-
-export function isOpenRouterConfigured(): boolean {
-  return Boolean(OPENROUTER_API_KEY);
+export interface AIProviderInfo {
+  id: string;
+  label: string;
+  baseUrl: string;
+  model: string;
 }
 
-function getOpenRouterClient(): OpenRouter | null {
-  if (!OPENROUTER_API_KEY) return null;
-  return new OpenRouter({ apiKey: OPENROUTER_API_KEY });
+export const KAIZEN_PROVIDER_STORAGE_KEY = 'kaizen_active_provider';
+
+/**
+ * Builds the list of available AI providers from `.env`.
+ * Add a provider by adding its `VITE_AI_PROVIDER_<ID>_BASE_URL` +
+ * `VITE_AI_PROVIDER_<ID>_MODEL` lines — it appears in the switcher automatically.
+ */
+export function getAIProviders(): AIProviderInfo[] {
+  const providers: AIProviderInfo[] = [];
+
+  const orBase = import.meta.env.VITE_AI_PROVIDER_OPENROUTER_BASE_URL;
+  const orModel = import.meta.env.VITE_AI_PROVIDER_OPENROUTER_MODEL;
+  if (orBase && orModel) providers.push({ id: 'openrouter', label: 'OpenRouter', baseUrl: orBase, model: orModel });
+
+  return providers;
+}
+
+/** True when at least one AI provider is configured. */
+export function isAIConfigured(): boolean {
+  return getAIProviders().length > 0;
 }
 
 export interface KaizenChatMessage {
@@ -86,42 +106,80 @@ export function buildKaizenContext(
 }
 
 /**
- * Streams a Kaizen reply from OpenRouter, calling `onToken` for every
- * content delta so the UI can render the response as it arrives.
- * Returns the full assistant response text.
+ * Streams a Kaizen reply through the same-origin proxy (`/api/kaizen`), which
+ * routes to the selected provider and injects its API key server-side.
+ * Calls `onToken` for every content delta so the UI renders the response as
+ * it arrives. Returns the full assistant response text.
  */
 export async function streamKaizenReply(
   messages: KaizenChatMessage[],
-  onToken: (text: string) => void
+  onToken: (text: string) => void,
+  provider: AIProviderInfo
 ): Promise<string> {
-  const client = getOpenRouterClient();
-  if (!client) throw new Error('OPENROUTER_KEY_MISSING');
+  if (!isAIConfigured()) throw new Error('AI_NOT_CONFIGURED');
 
   try {
-    const result = await client.chat.send({
-      chatRequest: {
-        model: AI_MODEL,
+    const res = await fetch('/api/kaizen', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Kaizen-Provider': provider.id
+      },
+      body: JSON.stringify({
+        model: provider.model,
         messages: [
           { role: 'system', content: KAIZEN_SYSTEM_PROMPT },
           ...messages.map((m) => ({ role: m.role, content: m.content }))
         ],
         stream: true
-      }
+      })
     });
 
-    // `stream: true` resolves to an EventStream<ChatStreamChunk>.
-    const stream = result as unknown as AsyncIterable<{
-      choices?: Array<{ delta?: { content?: string | null } }>;
-    }>;
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      let detail = body;
+      try {
+        const parsed = JSON.parse(body);
+        detail = parsed?.error || body;
+      } catch {
+        /* keep raw body */
+      }
+      throw new Error(`AI API error (${res.status}): ${String(detail).slice(0, 300)}`);
+    }
 
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('This endpoint did not return a streaming response.');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
     let full = '';
-    for await (const chunk of stream) {
-      const content = chunk.choices?.[0]?.delta?.content;
-      if (content) {
-        full += content;
-        onToken(content);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+          const json = JSON.parse(data);
+          const delta = json?.choices?.[0]?.delta?.content;
+          if (typeof delta === 'string' && delta) {
+            full += delta;
+            onToken(delta);
+          }
+        } catch {
+          /* skip keep-alive / partial lines */
+        }
       }
     }
+
     return full;
   } catch (err: any) {
     const message = err?.message || String(err || 'Unknown AI error');

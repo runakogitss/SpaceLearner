@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bot, Send, KeyRound, Sparkles, Brain, Loader2, RefreshCw, Rocket } from 'lucide-react';
+import { Bot, Send, KeyRound, Sparkles, Brain, Loader2, RefreshCw, Rocket, ChevronDown } from 'lucide-react';
 import { useStudyStore } from '../../store/useStudyStore';
 import {
   buildKaizenContext,
   streamKaizenReply,
-  isOpenRouterConfigured,
+  isAIConfigured,
+  getAIProviders,
   KAIZEN_WELCOME,
-  AI_MODEL,
+  KAIZEN_PROVIDER_STORAGE_KEY,
+  AIProviderInfo,
   KaizenChatMessage
 } from '../../lib/ai';
 import { insertSupabaseAIEvaluation } from '../../lib/supabase';
@@ -174,6 +176,15 @@ export const KaizenAdvisor: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Provider switcher: registry comes from .env, selection is remembered locally.
+  const [providers] = useState<AIProviderInfo[]>(() => getAIProviders());
+  const [activeProviderId, setActiveProviderId] = useState<string>(() => {
+    const saved = localStorage.getItem(KAIZEN_PROVIDER_STORAGE_KEY);
+    const envDefault = import.meta.env.VITE_AI_ACTIVE_PROVIDER || '';
+    return saved || envDefault || getAIProviders()[0]?.id || '';
+  });
+  const activeProvider = providers.find((p) => p.id === activeProviderId) || providers[0];
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, isStreaming]);
@@ -191,7 +202,7 @@ export const KaizenAdvisor: React.FC = () => {
     setIsStreaming(true);
 
     try {
-      if (!isOpenRouterConfigured()) throw new Error('OPENROUTER_KEY_MISSING');
+      if (!activeProvider) throw new Error('AI_NOT_CONFIGURED');
 
       let full = '';
       await streamKaizenReply(conversation.slice(-12), (delta) => {
@@ -201,15 +212,15 @@ export const KaizenAdvisor: React.FC = () => {
           next[next.length - 1] = { role: 'assistant', content: full };
           return next;
         });
-      });
+      }, activeProvider);
 
       if (!isSandboxMode && userProfile.id && !userProfile.id.startsWith('user-trial-')) {
         await insertSupabaseAIEvaluation(userProfile.id, context, full, 'general_advice');
       }
     } catch (err: any) {
       const friendly =
-        err?.message === 'OPENROUTER_KEY_MISSING'
-          ? 'Kaizen needs an API key. Add VITE_OPENROUTER_API_KEY to your .env file and refresh.'
+        err?.message === 'AI_NOT_CONFIGURED'
+          ? 'No AI provider is configured. Add VITE_AI_PROVIDER_<ID>_BASE_URL and VITE_AI_PROVIDER_<ID>_MODEL to your .env file and refresh.'
           : err?.message || 'Kaizen could not reach the AI service. Please try again.';
       setError(friendly);
       setMessages((prev) => {
@@ -235,15 +246,16 @@ export const KaizenAdvisor: React.FC = () => {
         AI ADVISOR — KAIZEN
       </h2>
 
-      {/* Missing API Key Banner */}
-      {!isOpenRouterConfigured() && (
+      {/* Missing AI Config Banner */}
+      {!isAIConfigured() && (
         <div className="rounded-2xl border border-amber-500/40 bg-amber-950/40 p-4 flex items-start gap-3">
           <KeyRound className="w-5 h-5 text-amber-300 mt-0.5 shrink-0" />
           <div>
-            <p className="text-xs font-bold text-amber-200 uppercase tracking-wider">OpenRouter API key not set</p>
+            <p className="text-xs font-bold text-amber-200 uppercase tracking-wider">AI advisor not configured</p>
             <p className="text-xs text-amber-200/80 mt-1">
-              Add <code className="bg-slate-950/60 px-1.5 py-0.5 rounded">VITE_OPENROUTER_API_KEY</code> to your{' '}
-              <code className="bg-slate-950/60 px-1.5 py-0.5 rounded">.env</code> file to bring Kaizen online.
+              Add a provider to your <code className="bg-slate-950/60 px-1.5 py-0.5 rounded">.env</code> file, e.g.{' '}
+              <code className="bg-slate-950/60 px-1.5 py-0.5 rounded">VITE_AI_PROVIDER_OPENROUTER_BASE_URL</code> +{' '}
+              <code className="bg-slate-950/60 px-1.5 py-0.5 rounded">_MODEL</code> (API keys are injected server-side).
             </p>
           </div>
         </div>
@@ -276,12 +288,34 @@ export const KaizenAdvisor: React.FC = () => {
                 </span>
               </div>
               <p className="text-[11px] text-cosmic-textMuted">
-                Space astronaut AI · {AI_MODEL}
+                Space astronaut AI · {activeProvider?.model || '—'}
               </p>
             </div>
           </div>
-          <div className="hidden sm:flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-purple-300 bg-purple-950/60 border border-purple-500/30 px-3 py-1.5 rounded-full">
+          <div className="flex items-center gap-2">
+            {/* Provider Switcher */}
+            {providers.length > 1 && (
+              <div className="relative">
+                <select
+                  value={activeProvider?.id || ''}
+                  onChange={(e) => {
+                    setActiveProviderId(e.target.value);
+                    localStorage.setItem(KAIZEN_PROVIDER_STORAGE_KEY, e.target.value);
+                  }}
+                  disabled={isStreaming}
+                  className="appearance-none bg-indigo-950/70 border border-purple-500/30 rounded-xl px-3 py-1.5 pr-8 text-xs font-semibold text-purple-300 focus:outline-none focus:border-purple-400 cursor-pointer"
+                  title="Switch AI provider"
+                >
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-slate-900 text-slate-200">
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-purple-300 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            )}
+            <span className="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-semibold text-purple-300 bg-purple-950/60 border border-purple-500/30 px-3 py-1.5 rounded-full">
               <Brain className="w-3.5 h-3.5" />
               Reading your live study data
             </span>

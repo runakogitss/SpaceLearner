@@ -4,3 +4,8 @@ VITE_SUPABASE_ANON_KEY=
 VITE_OPENROUTER_API_KEY=
 # USED FOR TESTING JUST IGNORE THIS
 VITE_ENABLE_SANDBOX_MODE=true
+
+# ── AI Provider (server-side; keys never reach the browser) ──
+VITE_AI_PROVIDER_OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+VITE_AI_PROVIDER_OPENROUTER_MODEL=nvidia/nemotron-3.5-lightning:free
+VITE_AI_ACTIVE_PROVIDER=openrouter
