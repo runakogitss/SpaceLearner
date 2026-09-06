@@ -17,8 +17,8 @@ export const BusinessCardPopover: React.FC<BusinessCardPopoverProps> = ({
 
   if (!isOpen) return null;
 
-  const fullName = userProfile.full_name || 'Reynard Runako';
-  const username = userProfile.username || 'reynard';
+  const fullName = userProfile.full_name || 'Guest';
+  const username = userProfile.username || 'guest';
   // userProfile.exp = lifetime total EXP; stats.userExp = progress within the
   // current level (exp_in_level). Derive level-relative values from a single
   // source of truth and never mix the two definitions.

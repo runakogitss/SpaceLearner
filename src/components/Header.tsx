@@ -66,9 +66,9 @@ export const Header: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fullName = userProfile.full_name || 'Reynard Runako';
-  const usernameHandle = `@${(userProfile.username || 'reynard').toLowerCase()}`;
-  const greetingName = (userProfile.full_name?.split(' ')[0] || userProfile.username || 'REYNARD').toUpperCase();
+  const fullName = userProfile.full_name || 'Guest';
+  const usernameHandle = `@${(userProfile.username || 'guest').toLowerCase()}`;
+  const greetingName = (userProfile.full_name?.split(' ')[0] || userProfile.username || 'GUEST').toUpperCase();
 
   return (
     <>

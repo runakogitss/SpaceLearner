@@ -5,8 +5,8 @@ import { isSupabaseConfigured, supabase, uploadSupabaseAvatar } from '../../lib/
 
 export const SettingsModal: React.FC = () => {
   const { userProfile, updateProfile, resetSandboxData, syncFromSupabase } = useStudyStore();
-  const [username, setUsername] = useState('reynard');
-  const [fullName, setFullName] = useState('Reynard Runako');
+  const [username, setUsername] = useState('guest');
+  const [fullName, setFullName] = useState('Guest');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState('');
   const [dailyGoal, setDailyGoal] = useState('120');
@@ -18,8 +18,8 @@ export const SettingsModal: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setUsername(userProfile.username || 'reynard');
-    setFullName(userProfile.full_name || 'Reynard Runako');
+    setUsername(userProfile.username || 'guest');
+    setFullName(userProfile.full_name || 'Guest');
     setAvatarPreview(userProfile.avatar_url || '');
     setDailyGoal(String(userProfile.daily_goal_minutes || 120));
   }, [userProfile]);
@@ -61,7 +61,7 @@ export const SettingsModal: React.FC = () => {
       const uploadedUrl = await uploadSupabaseAvatar(authUser.id, avatarFile);
       avatarUrl = uploadedUrl || await encodeAvatar(avatarFile);
     }
-    await updateProfile({ username: username.trim() || 'reynard', full_name: fullName.trim() || 'Reynard Runako', avatar_url: avatarUrl, daily_goal_minutes: Math.max(1, Number(dailyGoal) || 120) });
+    await updateProfile({ username: username.trim() || 'guest', full_name: fullName.trim() || 'Guest', avatar_url: avatarUrl, daily_goal_minutes: Math.max(1, Number(dailyGoal) || 120) });
     setAvatarFile(null);
     setMessage({ type: 'success', text: authUser ? 'Profile saved to your Space Learner account.' : 'Profile saved for this session.' });
   };
@@ -78,7 +78,7 @@ export const SettingsModal: React.FC = () => {
     setLoading(false);
   };
 
-  const signOut = async () => { if (supabase) await supabase.auth.signOut(); setAuthUser(null); resetSandboxData(); setMessage({ type: 'success', text: 'Signed out. Welcome, Reynard.' }); };
+  const signOut = async () => { if (supabase) await supabase.auth.signOut(); setAuthUser(null); resetSandboxData(); setMessage({ type: 'success', text: 'Signed out. Welcome, Guest.' }); };
 
   return <div className="max-w-5xl mx-auto space-y-6">
     <div className="relative overflow-hidden rounded-3xl border border-purple-500/20 bg-gradient-to-r from-indigo-950/70 via-cosmic-card to-purple-950/50 p-7 shadow-glow-card">
@@ -92,8 +92,8 @@ export const SettingsModal: React.FC = () => {
       <form onSubmit={saveProfile} className="lg:col-span-3 rounded-3xl border border-cosmic-border bg-cosmic-card/90 p-6 shadow-glow-card space-y-5">
         <div className="flex items-center gap-3"><div className="rounded-2xl border border-purple-400/30 bg-purple-950/70 p-3 text-purple-300"><User className="h-5 w-5" /></div><div><h3 className="text-sm font-bold tracking-wide text-white">PROFILE DETAILS</h3><p className="text-xs text-cosmic-textMuted">Visible in your personal study dashboard.</p></div></div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Display name" value={username} onChange={setUsername} placeholder="reynard" />
-          <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Reynard Runako" />
+          <Field label="Display name" value={username} onChange={setUsername} placeholder="guest" />
+          <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Guest" />
         </div>
         <div>
           <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-cosmic-textMuted">Profile photo</label>
