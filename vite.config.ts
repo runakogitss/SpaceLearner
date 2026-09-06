@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { loadProvidersFromEnv, handleKaizenProxy } from './server/kaizen-handler';
+import { loadProvidersFromEnv, handleKaizenProxy } from './api/kaizen';
 
 // Dev middleware that mirrors the production serverless function (api/kaizen.ts):
 // routes /api/kaizen to the provider chosen via the x-kaizen-provider header and
