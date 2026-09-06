@@ -6,7 +6,6 @@ import {
   BarChart3, 
   Settings, 
   Sparkles,
-  Rocket,
   Bot
 } from 'lucide-react';
 import { useStudyStore } from '../store/useStudyStore';
@@ -31,8 +30,8 @@ export const Sidebar: React.FC = () => {
       {/* Brand Header */}
       <div>
         <div className="flex items-center gap-3 px-2 py-4 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center shadow-glow-purple">
-            <Rocket className="w-6 h-6 text-white transform -rotate-12" />
+          <div className="w-11 h-11 rounded-xl overflow-hidden border border-purple-400/30 shadow-glow-purple flex items-center justify-center bg-slate-900 shrink-0">
+            <img src="/space-learner-logo.png" alt="Space Learner logo" className="w-full h-full object-contain" />
           </div>
           <div>
             <h1 className="font-outfit text-lg font-bold tracking-wider text-white flex items-center gap-1.5">
